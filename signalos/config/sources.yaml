@@ -1,0 +1,178 @@
+# Curated AI Product Manager intelligence catalog
+# tier: primary = official product signals | secondary = research corroboration (arXiv)
+
+category_labels:
+  official: "Official — vendor releases, changelogs, platform updates"
+  research: "Research — papers & preprints (secondary corroboration)"
+  community: "Community — builder blogs & practitioner discourse"
+  media: "Media — industry analysis & upskilling publications"
+  open_source: "Open Source — SDKs, frameworks, release notes"
+
+sources:
+  # --- PRIMARY: Official vendor signals ---
+  - id: openai_news
+    display_name: "OpenAI News"
+    category: official
+    tier: primary
+    authority_score: 98
+    type: rss
+    url: https://openai.com/blog/rss.xml
+    max_results: 8
+    topics: [model_release, product]
+    description: "Official OpenAI product and model announcements"
+
+  - id: google_ai_blog
+    display_name: "Google AI Blog"
+    category: official
+    tier: primary
+    authority_score: 96
+    type: rss
+    url: https://blog.google/technology/ai/rss/
+    max_results: 8
+    topics: [model_release, platform]
+    description: "Google AI product updates and research-to-product launches"
+
+  - id: google_deepmind
+    display_name: "Google DeepMind Blog"
+    category: official
+    tier: primary
+    authority_score: 95
+    type: rss
+    url: https://deepmind.google/blog/rss.xml
+    max_results: 6
+    topics: [research, model_release]
+    description: "DeepMind research and Gemini-related announcements"
+
+  - id: azure_ai_blog
+    display_name: "Microsoft Azure AI Blog"
+    category: official
+    tier: primary
+    authority_score: 94
+    type: rss
+    url: https://azure.microsoft.com/en-us/blog/feed/
+    max_results: 8
+    topics: [platform, enterprise_ai]
+    description: "Azure OpenAI, Copilot, and enterprise AI platform updates"
+
+  - id: huggingface_blog
+    display_name: "Hugging Face Blog"
+    category: official
+    tier: primary
+    authority_score: 92
+    type: rss
+    url: https://huggingface.co/blog/feed.xml
+    max_results: 8
+    topics: [open_source, tooling]
+    description: "Model hub, open-source ecosystem, and ML tooling updates"
+
+  - id: nvidia_ai_blog
+    display_name: "NVIDIA AI Blog"
+    category: official
+    tier: primary
+    authority_score: 93
+    type: rss
+    url: https://blogs.nvidia.com/feed/
+    max_results: 6
+    topics: [infrastructure, genai]
+    description: "GenAI infrastructure, NIM, and enterprise AI stack updates"
+
+  - id: openai_python_releases
+    display_name: "OpenAI Python SDK Releases"
+    category: open_source
+    tier: primary
+    authority_score: 90
+    type: github
+    repos: [openai/openai-python, openai/openai-cookbook]
+    max_results: 4
+    topics: [api_changelog, sdk]
+    description: "API changelog proxy via official SDK and cookbook releases"
+
+  - id: anthropic_sdk_releases
+    display_name: "Anthropic SDK Releases"
+    category: open_source
+    tier: primary
+    authority_score: 90
+    type: github
+    repos: [anthropics/anthropic-sdk-python]
+    max_results: 4
+    topics: [api_changelog, claude]
+    description: "Claude API/SDK changes via official release notes"
+
+  - id: langchain_releases
+    display_name: "LangChain & LangGraph Releases"
+    category: open_source
+    tier: primary
+    authority_score: 86
+    type: github
+    repos: [langchain-ai/langchain, langchain-ai/langgraph]
+    max_results: 4
+    topics: [agent_framework, tooling]
+    description: "Agent orchestration framework release notes"
+
+  # --- PRIMARY: Media & upskilling (verified, PM-relevant) ---
+  - id: mit_ai
+    display_name: "MIT Technology Review — AI"
+    category: media
+    tier: primary
+    authority_score: 88
+    type: rss
+    url: https://www.technologyreview.com/topic/artificial-intelligence/feed/
+    max_results: 6
+    topics: [industry_trends, policy]
+    description: "Industry trends and AI policy analysis"
+
+  - id: simon_willison
+    display_name: "Simon Willison's Blog"
+    category: community
+    tier: primary
+    authority_score: 84
+    type: atom
+    url: https://simonwillison.net/atom/everything/
+    max_results: 6
+    topics: [tooling, llm_apps]
+    description: "Practitioner-grade LLM tooling analysis — widely used by AI builders"
+
+  - id: latent_space
+    display_name: "Latent Space"
+    category: community
+    tier: primary
+    authority_score: 82
+    type: rss
+    url: https://www.latent.space/feed
+    max_results: 5
+    topics: [industry_trends, agents]
+    description: "AI engineering podcast & newsletter — popular with AI product leaders"
+
+  - id: ai_news
+    display_name: "AI News (Ben's Bites)"
+    category: media
+    tier: primary
+    authority_score: 80
+    type: rss
+    url: https://buttondown.email/ainews/rss
+    max_results: 5
+    topics: [industry_trends, startups]
+    description: "Daily AI industry digest used for upskilling and trend spotting"
+
+  - id: langchain_blog
+    display_name: "LangChain Blog"
+    category: community
+    tier: primary
+    authority_score: 83
+    type: rss
+    url: https://blog.langchain.dev/rss/
+    max_results: 5
+    topics: [agents, rag]
+    description: "Agent patterns, RAG, and production LLM architecture"
+
+  # --- SECONDARY: Research corroboration ---
+  - id: arxiv_ai
+    display_name: "arXiv — AI/ML Research"
+    category: research
+    tier: secondary
+    authority_score: 72
+    type: arxiv
+    query: "cat:cs.AI OR cat:cs.LG OR cat:cs.CL"
+    max_results: 5
+    topics: [research, papers]
+    description: "Secondary research source — adds depth when corroborating official signals"

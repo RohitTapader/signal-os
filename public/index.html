@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Signal</title>
+  <style>
+    :root {
+      --bg: #0B0E14;
+      --panel: #121826;
+      --border: #243047;
+      --text: #E8EEF9;
+      --muted: #8AA0C5;
+      --accent: #7AB7FF;
+      --good: #00B894;
+      --warn: #FDCB6E;
+      --bad: #FF7675;
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    a { color: var(--accent); text-decoration: none; }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 28px; }
+    .hero { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; margin-bottom: 24px; }
+    .title { font-size: 42px; margin:0 0 8px; }
+    .subtitle { color: var(--muted); margin:0; max-width: 760px; line-height:1.5; }
+    .grid { display:grid; grid-template-columns: 2fr 1fr; gap: 18px; }
+    .card { background:var(--panel); border:1px solid var(--border); border-radius:20px; padding:18px; }
+    .stats { display:grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+    .stat { background: #0f1522; border:1px solid var(--border); border-radius: 16px; padding: 14px; }
+    .stat .n { font-size: 24px; font-weight:700; margin-top:4px; }
+    .item { padding: 14px 0; border-top: 1px solid var(--border); }
+    .item:first-child { border-top: 0; }
+    .badge { display:inline-block; padding:4px 10px; border-radius:999px; font-size:12px; background:#18202e; color:#cfe0ff; margin-right:6px; }
+    .pill-good { color: var(--good); }
+    .pill-warn { color: var(--warn); }
+    .pill-bad { color: var(--bad); }
+    .flex { display:flex; gap: 10px; flex-wrap: wrap; }
+    .muted { color: var(--muted); }
+    .small { font-size: 12px; }
+    .repair { border-top:1px solid var(--border); padding-top: 12px; margin-top: 12px; }
+    .btn { background:#18202e; border:1px solid var(--border); color: var(--text); padding:10px 14px; border-radius:12px; cursor:pointer; }
+    .btn:hover { border-color: #3a4b68; }
+    code, pre { white-space: pre-wrap; word-break: break-word; }
+    @media (max-width: 920px) {
+      .grid { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .hero { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <div>
+        <h1 class="title">Signal</h1>
+        <p class="subtitle">
+          Daily AI intelligence digest with trusted-source ingestion, novelty filtering, executive intelligence analysis, signal scoring, Telegram delivery, feedback loops, and governed repair proposals.
+        </p>
+      </div>
+      <div class="card" style="min-width: 280px;">
+        <strong>Actions</strong>
+        <div class="flex" style="margin-top:12px;">
+          <button class="btn" onclick="runDigest()">Run digest now</button>
+          <button class="btn" onclick="loadLatest()">Refresh</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats" id="stats"></div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Latest signals</h2>
+        <div id="items"></div>
+      </div>
+      <div class="card">
+        <h2>Repair queue</h2>
+        <div id="repairs"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
