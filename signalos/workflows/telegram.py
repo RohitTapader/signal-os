@@ -18,34 +18,52 @@ def _esc(text: str | None) -> str:
     return html.escape(str(text or "").strip())
 
 
+PRIORITY_EMOJI = {
+    "Read Now": "🔥",
+    "Read This Week": "📌",
+    "Skim": "👀",
+    "Ignore": "💤",
+}
+
+
+def _is_distinct(whats_new: str, executive_summary: str) -> bool:
+    """Only show 'What's new' when it says something the executive summary
+    doesn't already cover — otherwise it's just restating the same point."""
+    whats_new = (whats_new or "").strip()
+    if not whats_new:
+        return False
+    return whats_new.lower() not in (executive_summary or "").lower()
+
+
 def format_digest_briefing(item: dict[str, Any]) -> str:
     """Rich HTML briefing for AI PMs — sent as text before slide images."""
     rec = item.get("should_you_read") or {}
     why = item.get("why_it_matters") or {}
+    recommendation = rec.get("recommendation", "Read Later")
+    emoji = PRIORITY_EMOJI.get(recommendation, "📌")
+
     lines: list[str] = [
         f"<b>{_esc(item.get('headline'))}</b>",
         (
             f"{_esc(item.get('source_display_name') or item.get('source_name'))} • "
             f"{_esc(item.get('source_category') or item.get('category_tag', 'media'))} • "
-            f"{item.get('signal_score', 0)}/100 • "
-            f"<b>{_esc(rec.get('recommendation', 'Read Later'))}</b>"
+            f"{emoji} <b>{_esc(recommendation)}</b>"
         ),
-        "",
     ]
+    if rec.get("reason"):
+        lines.append(f"<i>{_esc(rec['reason'])}</i>")
+    lines.append("")
 
     corroborating = item.get("corroborating_sources") or []
     if corroborating:
         names = ", ".join(_esc(c.get("display_name", "")) for c in corroborating[:4])
         lines += [f"<b>Cross-source cluster</b> ({item.get('source_count', 1)} sources)", f"Also covered by: {names}", ""]
 
-    if item.get("context"):
-        lines += ["<b>What this is</b>", _esc(item["context"]), ""]
-
-    if item.get("whats_new"):
-        lines += ["<b>What's new</b>", _esc(item["whats_new"]), ""]
-
     if item.get("executive_summary"):
         lines += ["<b>Executive summary</b>", _esc(item["executive_summary"]), ""]
+
+    if _is_distinct(item.get("whats_new", ""), item.get("executive_summary", "")):
+        lines += ["<b>What's new</b>", _esc(item["whats_new"]), ""]
 
     bullets = item.get("what_changed") or []
     if bullets:
@@ -56,53 +74,42 @@ def format_digest_briefing(item: dict[str, Any]) -> str:
     if item.get("key_innovation"):
         lines += ["<b>Key innovation</b>", _esc(item["key_innovation"]), ""]
 
-    if why.get("product"):
-        lines += ["<b>Product impact</b>", _esc(why["product"]), ""]
-    if why.get("business"):
-        lines += ["<b>Business impact</b>", _esc(why["business"]), ""]
+    if item.get("roadmap_relevance"):
+        lines += ["<b>🎯 Roadmap relevance</b>", _esc(item["roadmap_relevance"]), ""]
+
+    if item.get("business_metric_impact"):
+        lines += ["<b>💰 Business metric impact</b>", _esc(item["business_metric_impact"]), ""]
+
     if why.get("competitive"):
-        lines += ["<b>Competitive impact</b>", _esc(why["competitive"]), ""]
+        lines += ["<b>🏆 Competitive read</b>", _esc(why["competitive"]), ""]
 
     if item.get("pm_takeaway"):
         lines += ["<b>PM takeaway</b>", _esc(item["pm_takeaway"]), ""]
 
-    if item.get("score_explanation"):
-        lines += ["<b>Signal score</b>", _esc(item["score_explanation"]), ""]
-
-    breakdown = item.get("signal_score_breakdown") or {}
-    components = breakdown.get("components") or []
-    if components:
-        lines.append("<b>Score breakdown</b>")
-        for comp in components[:5]:
-            name = _esc(comp.get("name", "").replace("_", " ").title())
-            pts = comp.get("weighted_points", 0)
-            lines.append(f"• {name}: +{pts:.1f} pts")
-        lines.append("")
-
     if item.get("recommended_action"):
         lines += ["<b>Recommended action</b>", _esc(item["recommended_action"]), ""]
 
-    evidence = item.get("supporting_evidence") or []
-    if evidence:
-        lines.append("<b>Evidence</b>")
-        for ev in evidence[:3]:
-            claim = _esc(ev.get("claim", ""))
-            snippet = _esc(ev.get("evidence", ""))
-            if claim:
-                lines.append(f"• <i>{claim}</i>: {snippet}")
+    links: list[str] = []
+    if item.get("source_url"):
+        links.append(str(item["source_url"]))
+    for ev in item.get("supporting_evidence") or []:
+        url = ev.get("source_url") or ev.get("source", "")
+        if url:
+            links.append(str(url))
+    for c in corroborating:
+        if c.get("url"):
+            links.append(str(c["url"]))
+    links = list(dict.fromkeys(links))  # dedupe, keep order
+    if links:
+        lines.append("<b>Sources</b>")
+        for url in links[:5]:
+            lines.append(f'• <a href="{_esc(url)}">{_esc(url)}</a>')
         lines.append("")
 
     if item.get("limitations"):
         lines += ["<b>Limitations</b>", _esc(item["limitations"]), ""]
 
-    if rec.get("reason"):
-        lines += ["<b>Why read (or skip)</b>", _esc(rec["reason"]), ""]
-
-    url = item.get("source_url") or ""
-    if url:
-        lines.append(f'<a href="{_esc(url)}">Read source</a>')
-
-    text = "\n".join(lines)
+    text = "\n".join(lines).strip()
     if len(text) <= TELEGRAM_TEXT_LIMIT:
         return text
     return text[: TELEGRAM_TEXT_LIMIT - 20] + "\n\n<i>(truncated)</i>"

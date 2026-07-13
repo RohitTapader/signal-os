@@ -16,6 +16,8 @@ FALLBACK_IMPACT = {
     "whats_new": "",
     "what_changed": [],
     "key_innovation": "",
+    "roadmap_relevance": "",
+    "business_metric_impact": "",
     "why_it_matters": {"product_business": [], "competitive": "", "product": "", "business": ""},
     "pm_takeaway": "",
     "recommended_action": "Review the source directly.",
@@ -25,6 +27,7 @@ FALLBACK_IMPACT = {
     "supporting_evidence": [],
     "limitations": "",
     "should_you_read": {"recommendation": "Read Later", "reason": "Validation fallback"},
+    "chart_data": None,
 }
 
 
@@ -69,10 +72,26 @@ def _normalize_evidence(
             source_url = corroborating_urls[i] if i < len(corroborating_urls) else primary_url
         normalized.append({
             "claim": ev.get("claim", ""),
-            "evidence": ev.get("evidence", ""),
             "source_url": str(source_url),
         })
     return normalized
+
+
+def _normalize_chart_data(raw: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not raw or not isinstance(raw, dict):
+        return None
+    series = raw.get("series") or []
+    clean_series = []
+    for point in series[:5]:
+        try:
+            clean_series.append({"label": str(point.get("label", ""))[:40], "value": float(point.get("value"))})
+        except (TypeError, ValueError):
+            continue
+    if len(clean_series) < 2:
+        # A "chart" with 0-1 comparable points isn't a chart — drop it rather
+        # than render a single meaningless bar.
+        return None
+    return {"title": str(raw.get("title", ""))[:80], "unit": str(raw.get("unit", ""))[:12], "series": clean_series}
 
 
 def _preference_block(preferences: PreferenceProfile | None) -> str:
@@ -136,12 +155,22 @@ URL: {item.url}
 {_angle_block(user_angle)}
 
 Rules:
-- context must combine background AND what's new (avoid repeating the same idea in executive_summary opening).
-- what_changed: 4-5 bullets, each a specific change an AI PM must track.
-- why_it_matters.product_business: 4-5 detailed bullets merging product AND business implications for senior PM decisions.
-- why_it_matters.competitive: competitive edge, what rivals are doing, impact on business metrics (COGS, revenue, retention, speed).
-- pm_takeaway: 4-6 detailed sentences with insights to incorporate into PM practice.
-- supporting_evidence: each item needs claim, evidence quote/paraphrase, and source_url (use {item.url} or corroborating URLs).
+- executive_summary: 2-3 sentences, decision-oriented — what happened and why it matters, stated directly.
+- whats_new: ONE short sentence, only if it adds something not already in executive_summary. Otherwise "".
+- what_changed: 3-4 bullets max, each a specific, concrete delta — not a restatement of the headline.
+- roadmap_relevance: 1-2 sentences, a SPECIFIC actionable implication for a PM's roadmap/backlog this quarter.
+- business_metric_impact: 1-2 sentences naming ONE concrete business metric (CAC, COGS, margin, retention,
+  ARPU, time-to-market, inference cost) and the directional effect. Say plainly if the source gives no basis
+  for a metric claim — never invent one.
+- why_it_matters.product_business: 3-4 bullets — supporting detail NOT already covered by roadmap_relevance
+  or business_metric_impact.
+- why_it_matters.competitive: 2-3 sentences on competitive positioning.
+- pm_takeaway: 2-3 punchy sentences — the one thing to remember and act on.
+- chart_data: ONLY if the source has genuinely comparable numeric data (pricing, benchmark scores, latency,
+  adoption counts, before/after). Real numbers only, up to 5 points. Otherwise null.
+- supporting_evidence: 2-3 items, each just claim and source_url (use {item.url} or corroborating URLs). No quotes.
+- should_you_read.reason: one plain-English sentence — must make sense to someone with zero knowledge of any
+  internal scoring system.
 
 Return JSON only:
 {{
@@ -152,6 +181,8 @@ Return JSON only:
   "whats_new": "...",
   "what_changed": ["..."],
   "key_innovation": "...",
+  "roadmap_relevance": "...",
+  "business_metric_impact": "...",
   "why_it_matters": {{
     "product_business": ["..."],
     "competitive": "..."
@@ -161,9 +192,10 @@ Return JSON only:
   "companies_impacted": ["..."],
   "confidence": 0-1,
   "source_url": "{item.url}",
-  "supporting_evidence": [{{"claim": "...", "evidence": "...", "source_url": "https://..."}}],
+  "supporting_evidence": [{{"claim": "...", "source_url": "https://..."}}],
   "limitations": "...",
-  "should_you_read": {{"recommendation": "...", "reason": "..."}}
+  "should_you_read": {{"recommendation": "...", "reason": "..."}},
+  "chart_data": {{"title": "...", "unit": "...", "series": [{{"label": "...", "value": 0}}]}} or null
 }}
 
 SOURCE TEXT:
@@ -191,4 +223,5 @@ SOURCE TEXT:
         "reason": (merged.get("should_you_read") or {}).get("reason", ""),
     }
     merged["source_url"] = str(item.url)
+    merged["chart_data"] = _normalize_chart_data(merged.get("chart_data"))
     return ImpactResult(**merged)

@@ -6,8 +6,14 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 WIDTH, HEIGHT = 1080, 1350
+MARGIN = 80
+CONTENT_W = WIDTH - 2 * MARGIN
+INNER_PAD = 32
+BOTTOM_LIMIT = HEIGHT - 70
+
 BG = "#0B0E14"
 PANEL = "#121826"
+PANEL_ALT = "#152033"
 TEXT = "#E8EEF9"
 MUTED = "#8AA0C5"
 BORDER = "#243047"
@@ -23,6 +29,19 @@ CATEGORY_COLORS = {
     "general": "#7AB7FF",
 }
 
+# Qualitative priority styling — deliberately no raw numbers here. The badge
+# color + label + one plain-English reason line are the entire signal; a
+# reader shouldn't need to know how the score was computed to act on it.
+# No emoji: color fonts aren't reliably available across dev (Windows) and
+# prod (Vercel's Linux container), so glyphs render as tofu boxes on at
+# least one of the two — color-coding alone carries the signal instead.
+PRIORITY_STYLE = {
+    "Read Now": {"color": "#FF6B6B"},
+    "Read This Week": {"color": "#FDCB6E"},
+    "Skim": {"color": "#7AB7FF"},
+    "Ignore": {"color": "#5C6B84"},
+}
+
 
 def _load_font(size: int, bold: bool = False):
     candidates = [
@@ -34,6 +53,26 @@ def _load_font(size: int, bold: bool = False):
         if Path(c).exists():
             return ImageFont.truetype(c, size)
     return ImageFont.load_default()
+
+
+class Fonts:
+    hero = None
+    h2 = None
+    body = None
+    body_sm = None
+    tag = None
+    caption = None
+
+    @classmethod
+    def load(cls):
+        if cls.hero is None:
+            cls.hero = _load_font(56, bold=True)
+            cls.h2 = _load_font(38, bold=True)
+            cls.body = _load_font(30, bold=False)
+            cls.body_sm = _load_font(25, bold=False)
+            cls.tag = _load_font(23, bold=True)
+            cls.caption = _load_font(21, bold=False)
+        return cls
 
 
 def _wrap(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> list[str]:
@@ -62,28 +101,103 @@ def _draw_lines(draw: ImageDraw.ImageDraw, x: int, y: int, lines: list[str], fon
     return y
 
 
-def _merge_context(context: str, whats_new: str) -> str:
-    context = (context or "").strip()
-    whats_new = (whats_new or "").strip()
-    if not context and not whats_new:
-        return ""
-    if not whats_new or whats_new.lower() in context.lower():
-        return context
-    if context.lower() in whats_new.lower():
-        return whats_new
-    return f"{context} {whats_new}".strip()
-
-
 def _base(draw: ImageDraw.ImageDraw, accent: str):
     draw.rectangle([0, 0, WIDTH, 14], fill=accent)
     draw.rounded_rectangle([40, 40, WIDTH - 40, HEIGHT - 40], radius=36, outline=BORDER, width=2)
 
 
-def _panel(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], fill: str = PANEL):
-    draw.rounded_rectangle(box, radius=26, fill=fill)
+def _pill(draw: ImageDraw.ImageDraw, x: int, y: int, text: str, font, fill: str, text_color: str = "white", pad_x: int = 20, pad_y: int = 10) -> int:
+    w = draw.textbbox((0, 0), text, font=font)[2]
+    draw.rounded_rectangle([x, y, x + w + pad_x * 2, y + font.size + pad_y * 2], radius=(font.size + pad_y * 2) // 2, fill=fill)
+    draw.text((x + pad_x, y + pad_y - 2), text, font=font, fill=text_color)
+    return x + w + pad_x * 2
+
+
+def _panel_block(
+    draw: ImageDraw.ImageDraw,
+    y: int,
+    *,
+    icon_title: str,
+    title_color: str,
+    body: str,
+    font_body,
+    max_lines: int,
+    fill: str = PANEL,
+    line_height: int = 38,
+    x: int = MARGIN,
+    width: int = CONTENT_W,
+    gap_after: int = 20,
+) -> int:
+    """Draws one title+body card sized to its actual wrapped content, and
+    returns the y cursor for the next element. No fixed panel height, so a
+    short body never leaves a slab of empty space below it."""
+    body = (body or "").strip()
+    if not body:
+        return y
+    lines = _wrap(draw, body, font_body, width - 2 * INNER_PAD)[:max_lines]
+    if not lines:
+        return y
+    header_h = 44
+    panel_h = INNER_PAD + header_h + len(lines) * line_height + (INNER_PAD - 8)
+    if y + panel_h > BOTTOM_LIMIT:
+        available_lines = max(1, (BOTTOM_LIMIT - y - INNER_PAD - header_h - (INNER_PAD - 8)) // line_height)
+        lines = lines[:available_lines]
+        panel_h = INNER_PAD + header_h + len(lines) * line_height + (INNER_PAD - 8)
+        if not lines or y + panel_h > BOTTOM_LIMIT:
+            return y
+    draw.rounded_rectangle([x, y, x + width, y + panel_h], radius=26, fill=fill)
+    draw.text((x + INNER_PAD, y + 20), icon_title, font=Fonts.tag, fill=title_color)
+    _draw_lines(draw, x + INNER_PAD, y + 20 + header_h, lines, font_body, TEXT, line_height)
+    return y + panel_h + gap_after
+
+
+def _bullet_cards(
+    draw: ImageDraw.ImageDraw,
+    y: int,
+    bullets: list[str],
+    *,
+    font,
+    accent: str,
+    max_items: int,
+    line_height: int = 36,
+    fill: str = PANEL,
+) -> int:
+    for bullet in bullets[:max_items]:
+        lines = _wrap(draw, bullet, font, CONTENT_W - 2 * INNER_PAD - 36)[:4]
+        if not lines:
+            continue
+        card_h = INNER_PAD + len(lines) * line_height + (INNER_PAD - 10)
+        if y + card_h > BOTTOM_LIMIT:
+            break
+        draw.rounded_rectangle([MARGIN, y, MARGIN + CONTENT_W, y + card_h], radius=22, fill=fill)
+        draw.ellipse([MARGIN + 22, y + INNER_PAD + 6, MARGIN + 34, y + INNER_PAD + 18], fill=accent)
+        _draw_lines(draw, MARGIN + 54, y + INNER_PAD, lines, font, TEXT, line_height)
+        y += card_h + 16
+    return y
+
+
+def _priority_style(recommendation: str) -> dict:
+    return PRIORITY_STYLE.get(recommendation, PRIORITY_STYLE["Skim"])
+
+
+def _format_chart_value(value: float, unit: str) -> str:
+    if unit in ("$", "€", "£", "¥"):
+        return f"{unit}{value:g}"
+    if not unit:
+        return f"{value:g}"
+    return f"{value:g} {unit}"
+
+
+def _footer(draw: ImageDraw.ImageDraw, data: dict):
+    source = data.get("source_logo_text", "")
+    date = data.get("date", "")
+    if not source and not date:
+        return
+    draw.text((MARGIN, 1255), f"{source}  •  {date}" if source and date else (source or date), font=Fonts.caption, fill=MUTED)
 
 
 def render_slide(slide_type: str, data: dict, out_path: str) -> str:
+    Fonts.load()
     img = Image.new("RGB", (WIDTH, HEIGHT), BG)
     draw = ImageDraw.Draw(img)
 
@@ -91,129 +205,147 @@ def render_slide(slide_type: str, data: dict, out_path: str) -> str:
     accent = CATEGORY_COLORS.get(category, CATEGORY_COLORS["general"])
     _base(draw, accent)
 
-    font_xl = _load_font(50, bold=True)
-    font_l = _load_font(38, bold=True)
-    font_m = _load_font(26, bold=False)
-    font_s = _load_font(22, bold=False)
-    font_tag = _load_font(22, bold=True)
-    font_sm = _load_font(18, bold=False)
+    if slide_type == "hook":
+        right_edge = MARGIN + CONTENT_W
+        cat_end = _pill(draw, MARGIN, 76, category.upper(), Fonts.tag, accent)
 
-    if slide_type == "title":
-        score = data.get("signal_score", 0)
-        rec = data.get("recommendation", "")
-        draw.rounded_rectangle([80, 80, 360, 126], radius=22, fill=accent)
-        draw.text((104, 90), data.get("category_tag", "GENERAL").upper(), font=font_tag, fill="white")
+        rec = data.get("recommendation", "Skim")
+        style = _priority_style(rec)
+        pill_text = rec.upper()
+        pill_w = draw.textbbox((0, 0), pill_text, font=Fonts.tag)[2] + 40
+        _pill(draw, right_edge - pill_w, 76, pill_text, Fonts.tag, style["color"], text_color="#0B0E14")
 
-        draw.rounded_rectangle([840, 80, 1000, 126], radius=22, fill=PANEL)
-        draw.text((866, 90), f"{score}/100", font=font_tag, fill=TEXT)
+        y = 150
+        headline_lines = _wrap(draw, data.get("headline", ""), Fonts.hero, CONTENT_W)[:4]
+        y = _draw_lines(draw, MARGIN, y, headline_lines, Fonts.hero, TEXT, 66) + 6
 
-        headline = data.get("headline", "")
-        y = 170
-        for line in _wrap(draw, headline, font_xl, 920)[:3]:
-            draw.text((90, y), line, font=font_xl, fill=TEXT)
-            y += 58
+        reason = (data.get("recommendation_reason") or "").strip()
+        if reason:
+            reason_lines = _wrap(draw, reason, Fonts.body_sm, CONTENT_W)[:2]
+            y = _draw_lines(draw, MARGIN, y + 6, reason_lines, Fonts.body_sm, style["color"], 32) + 16
 
-        merged_context = _merge_context(data.get("context", ""), data.get("whats_new", ""))
-        if merged_context:
-            _panel(draw, (90, y + 10, 990, y + 200), fill="#101724")
-            draw.text((120, y + 24), "Context", font=font_tag, fill=accent)
-            y = _draw_lines(draw, 120, y + 54, _wrap(draw, merged_context, font_sm, 820)[:6], font_sm, TEXT, 24) + 8
+        y = _panel_block(
+            draw, y,
+            icon_title="EXECUTIVE SUMMARY", title_color=accent,
+            body=data.get("executive_summary", ""), font_body=Fonts.body, max_lines=7,
+            fill=PANEL_ALT, line_height=40,
+        )
 
-        summary = data.get("executive_summary", "")
-        if summary:
-            _panel(draw, (90, y + 10, 990, y + 280), fill="#152033")
-            draw.text((120, y + 24), "Executive summary", font=font_tag, fill=accent)
-            _draw_lines(draw, 120, y + 54, _wrap(draw, summary, font_sm, 820)[:7], font_sm, TEXT, 24)
+        whats_new = (data.get("whats_new") or "").strip()
+        if whats_new:
+            y = _panel_block(
+                draw, y,
+                icon_title="WHAT'S NEW", title_color=accent,
+                body=whats_new, font_body=Fonts.body_sm, max_lines=3,
+                fill=PANEL, line_height=32,
+            )
 
-        draw.text((90, 1240), f"{data.get('source_logo_text','Source')} • {data.get('date','')}", font=font_s, fill=MUTED)
-        draw.rounded_rectangle([760, 1220, 1000, 1270], radius=18, fill=PANEL)
-        draw.text((784, 1232), rec or data.get("confidence_badge", ""), font=font_s, fill=TEXT)
+        _footer(draw, data)
 
     elif slide_type == "what_changed":
-        draw.text((80, 90), "What's Changed / What's New", font=font_l, fill=TEXT)
+        draw.text((MARGIN, 80), "What Changed", font=Fonts.h2, fill=TEXT)
+        y = 150
 
         bullets = list(data.get("bullets", []) or [])
         key_innovation = (data.get("key_innovation") or "").strip()
         if key_innovation and key_innovation not in " ".join(bullets):
             bullets = [key_innovation] + bullets
 
-        card_y = 160
-        for bullet in bullets[:5]:
-            card_h = 140
-            _panel(draw, (80, card_y, 1000, card_y + card_h), fill="#101724")
-            lines = _wrap(draw, f"• {bullet}", font_m, 840)[:4]
-            _draw_lines(draw, 110, card_y + 18, lines, font_m, TEXT, 30)
-            card_y += card_h + 14
-            if card_y > 1200:
-                break
+        y = _bullet_cards(draw, y, bullets, font=Fonts.body, accent=accent, max_items=4, line_height=38)
+        _footer(draw, data)
 
-        draw.text((80, 1280), data.get("source_url", ""), font=font_s, fill=MUTED)
+    elif slide_type == "strategic_impact":
+        draw.text((MARGIN, 80), "Strategic Impact", font=Fonts.h2, fill=TEXT)
+        y = 150
 
-    elif slide_type == "why_it_matters":
-        draw.text((80, 90), "Why it matters", font=font_l, fill=TEXT)
-        y = 160
+        y = _panel_block(
+            draw, y,
+            icon_title="ROADMAP", title_color="#7AB7FF",
+            body=data.get("roadmap_relevance", ""), font_body=Fonts.body, max_lines=5,
+            fill=PANEL_ALT, line_height=38,
+        )
+        y = _panel_block(
+            draw, y,
+            icon_title="BUSINESS METRIC", title_color="#00B894",
+            body=data.get("business_metric_impact", ""), font_body=Fonts.body, max_lines=5,
+            fill=PANEL, line_height=38,
+        )
+        y = _panel_block(
+            draw, y,
+            icon_title="COMPETITIVE READ", title_color="#FDCB6E",
+            body=data.get("competitive_impact", ""), font_body=Fonts.body_sm, max_lines=5,
+            fill=PANEL_ALT, line_height=32,
+        )
 
-        product_business = data.get("product_business_bullets") or []
-        if not product_business:
-            product = data.get("product_impact", "")
-            business = data.get("business_impact", "")
-            if product:
-                product_business.append(product)
-            if business:
-                product_business.append(business)
+        extra = [b for b in (data.get("product_business_bullets") or []) if b][:2]
+        if extra and y < BOTTOM_LIMIT - 80:
+            draw.text((MARGIN, y + 4), "ALSO WORTH NOTING", font=Fonts.caption, fill=MUTED)
+            y += 40
+            y = _bullet_cards(draw, y, extra, font=Fonts.body_sm, accent=MUTED, max_items=2, line_height=30, fill=PANEL)
+        _footer(draw, data)
 
-        if product_business:
-            _panel(draw, (80, y, 1000, y + 420), fill="#101724")
-            draw.text((110, y + 18), "Product & business impact", font=font_tag, fill=accent)
-            by = y + 52
-            for point in product_business[:5]:
-                lines = _wrap(draw, f"• {point}", font_sm, 820)[:3]
-                by = _draw_lines(draw, 110, by, lines, font_sm, TEXT, 26) + 6
-            y += 440
+    elif slide_type == "chart":
+        chart = data.get("chart", {}) or {}
+        draw.text((MARGIN, 80), chart.get("title", "Comparison"), font=Fonts.h2, fill=TEXT)
+        unit = chart.get("unit", "")
+        series = (chart.get("series") or [])[:5]
 
-        competitive = data.get("competitive_impact", "")
-        if competitive:
-            _panel(draw, (80, y, 1000, min(y + 520, 1280)), fill="#152033")
-            draw.text((110, y + 18), "Competitive intelligence", font=font_tag, fill=accent)
-            draw.text((110, y + 50), "Edge, rivals & business metrics", font=font_sm, fill=MUTED)
-            _draw_lines(draw, 110, y + 78, _wrap(draw, competitive, font_sm, 820)[:12], font_sm, TEXT, 26)
+        y = 180
+        if series:
+            max_val = max((abs(p.get("value", 0)) for p in series), default=1) or 1
+            label_col_w = 300
+            bar_area_w = CONTENT_W - label_col_w - 140
+            bar_h = 64
+            gap = 46
+            for point in series:
+                label = str(point.get("label", ""))
+                value = point.get("value", 0)
+                label_lines = _wrap(draw, label, Fonts.body_sm, label_col_w)[:2]
+                _draw_lines(draw, MARGIN, y + (bar_h - len(label_lines) * 30) // 2, label_lines, Fonts.body_sm, TEXT, 30)
+                bar_x = MARGIN + label_col_w
+                bar_w = max(10, int(bar_area_w * (abs(value) / max_val)))
+                draw.rounded_rectangle([bar_x, y, bar_x + bar_w, y + bar_h], radius=14, fill=accent)
+                value_text = _format_chart_value(value, unit)
+                draw.text((bar_x + bar_w + 20, y + (bar_h - 30) // 2), value_text, font=Fonts.body, fill=TEXT)
+                y += bar_h + gap
+        draw.text((MARGIN, min(y + 10, BOTTOM_LIMIT)), "Figures as reported in the source.", font=Fonts.caption, fill=MUTED)
+        _footer(draw, data)
 
     elif slide_type == "recommendation":
-        draw.text((80, 90), "Recommendation", font=font_l, fill=TEXT)
-        rec = data.get("recommendation", "Read Later")
-        why = data.get("recommendation_reason", "")
-        pm_takeaway = data.get("pm_takeaway", "")
-        evidence = data.get("supporting_evidence", [])
+        rec = data.get("recommendation", "Skim")
+        style = _priority_style(rec)
+        pill_text = rec.upper()
+        _pill(draw, MARGIN, 78, pill_text, Fonts.h2, style["color"], text_color="#0B0E14", pad_x=28, pad_y=14)
+        y = 78 + Fonts.h2.size + 28 + 24
 
-        _panel(draw, (80, 150, 1000, 260), fill="#101724")
-        draw.text((110, 170), rec, font=font_xl, fill=accent)
-        _draw_lines(draw, 110, 230, _wrap(draw, why, font_sm, 830)[:2], font_sm, TEXT, 24)
+        reason = (data.get("recommendation_reason") or "").strip()
+        if reason:
+            reason_lines = _wrap(draw, reason, Fonts.body_sm, CONTENT_W)[:2]
+            y = _draw_lines(draw, MARGIN, y, reason_lines, Fonts.body_sm, MUTED, 32) + 24
 
-        y = 280
-        if pm_takeaway:
-            _panel(draw, (80, y, 1000, y + 280), fill="#152033")
-            draw.text((110, y + 16), "PM takeaway", font=font_tag, fill=accent)
-            _draw_lines(draw, 110, y + 48, _wrap(draw, pm_takeaway, font_sm, 820)[:10], font_sm, TEXT, 24)
-            y += 300
+        y = _panel_block(
+            draw, y,
+            icon_title="RECOMMENDED ACTION", title_color=accent,
+            body=data.get("recommended_action", ""), font_body=Fonts.body, max_lines=4,
+            fill=PANEL_ALT, line_height=38,
+        )
+        y = _panel_block(
+            draw, y,
+            icon_title="PM TAKEAWAY", title_color=accent,
+            body=data.get("pm_takeaway", ""), font_body=Fonts.body, max_lines=5,
+            fill=PANEL, line_height=38,
+        )
 
-        if evidence:
-            _panel(draw, (80, y, 1000, min(y + 420, 1220)))
-            draw.text((110, y + 16), "Evidence", font=font_tag, fill=accent)
-            ey = y + 48
-            for ev in evidence[:3]:
-                claim = ev.get("claim", "")
-                snippet = ev.get("evidence", "")
-                source_url = ev.get("source_url") or ev.get("source", "")
-                if claim:
-                    ey = _draw_lines(draw, 110, ey, _wrap(draw, f"• {claim}", font_sm, 820)[:2], font_sm, TEXT, 22) + 2
-                if snippet:
-                    ey = _draw_lines(draw, 130, ey, _wrap(draw, snippet, font_sm, 800)[:2], font_sm, MUTED, 20) + 2
-                if source_url and str(source_url).startswith("http"):
-                    ey = _draw_lines(draw, 130, ey, _wrap(draw, str(source_url), font_sm, 800)[:1], font_sm, accent, 20) + 8
-
-        score = data.get("signal_score", 0)
-        draw.rounded_rectangle([80, 1260, 280, 1305], radius=20, fill=PANEL)
-        draw.text((106, 1272), f"Signal {score}/100", font=font_s, fill=TEXT)
+        links = list(dict.fromkeys([u for u in (data.get("source_links") or []) if u]))[:4]
+        if links and y < BOTTOM_LIMIT - 60:
+            draw.text((MARGIN, y), "SOURCES", font=Fonts.caption, fill=MUTED)
+            y += 34
+            for link in links:
+                if y > BOTTOM_LIMIT:
+                    break
+                line = _wrap(draw, link, Fonts.caption, CONTENT_W - 30)[:1]
+                y = _draw_lines(draw, MARGIN, y, [f"• {line[0]}" if line else f"• {link}"], Fonts.caption, accent, 30)
+        _footer(draw, data)
 
     else:
         raise ValueError(f"Unsupported slide type: {slide_type}")
