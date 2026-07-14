@@ -7,26 +7,43 @@ from signalos.source_intelligence.models import SignalScoreBreakdown, SignalScor
 def compute_signal_score(
     *,
     novelty_confidence: float,
-    impact_confidence: float,
+    product_impact_confidence: float,
+    business_impact_confidence: float,
+    strategic_relevance_confidence: float,
     authority_score: int,
     cluster_size: int,
     evidence_count: int,
     primary_tier: str = "primary",
+    has_decision: bool = False,
+    category: str = "",
 ) -> SignalScoreBreakdown:
-    """Transparent signal score with per-component breakdown for PM explainability."""
+    """Transparent, PM-relevant signal score with a per-component breakdown.
+
+    Deterministic given its inputs — the only non-deterministic part of the
+    pipeline is the LLM estimating the three confidence sub-scores from
+    source text (signalos.agents.impact_agent); everything from here down
+    (weighting, banding, the recommendation label) is plain code.
+    """
 
     novelty_raw = max(0.0, min(1.0, novelty_confidence)) * 100
-    impact_raw = max(0.0, min(1.0, impact_confidence)) * 100
+    product_raw = max(0.0, min(1.0, product_impact_confidence)) * 100
+    business_raw = max(0.0, min(1.0, business_impact_confidence)) * 100
+    strategic_raw = max(0.0, min(1.0, strategic_relevance_confidence)) * 100
     authority_raw = float(max(0, min(100, authority_score)))
-    cluster_raw = min(100.0, max(0.0, (cluster_size - 1) * 25.0))
+    # Trend momentum proxy: how many independent sources are already covering
+    # this story. No separate momentum model — cross-source corroboration is
+    # the deterministic, evidence-based signal for "this is picking up."
+    momentum_raw = min(100.0, max(0.0, (cluster_size - 1) * 25.0))
     evidence_raw = min(100.0, max(0.0, evidence_count * 20.0))
 
     weights = {
-        "novelty": 0.28,
-        "impact": 0.28,
-        "source_authority": 0.24,
-        "cross_source_corroboration": 0.12,
-        "evidence_depth": 0.08,
+        "novelty": 0.20,
+        "product_impact": 0.18,
+        "business_impact": 0.18,
+        "strategic_relevance": 0.14,
+        "source_authority": 0.16,
+        "trend_momentum": 0.08,
+        "evidence_strength": 0.06,
     }
 
     components = [
@@ -38,11 +55,25 @@ def compute_signal_score(
             explanation=f"Novelty confidence {novelty_confidence:.0%} — how new vs. prior signals in our corpus.",
         ),
         SignalScoreComponent(
-            name="impact",
-            weight=weights["impact"],
-            raw_score=round(impact_raw, 1),
-            weighted_points=round(weights["impact"] * impact_raw, 1),
-            explanation=f"Impact confidence {impact_confidence:.0%} — expected product/business relevance for an AI PM.",
+            name="product_impact",
+            weight=weights["product_impact"],
+            raw_score=round(product_raw, 1),
+            weighted_points=round(weights["product_impact"] * product_raw, 1),
+            explanation=f"Product impact confidence {product_impact_confidence:.0%} — how much this changes what an AI PM builds or ships.",
+        ),
+        SignalScoreComponent(
+            name="business_impact",
+            weight=weights["business_impact"],
+            raw_score=round(business_raw, 1),
+            weighted_points=round(weights["business_impact"] * business_raw, 1),
+            explanation=f"Business impact confidence {business_impact_confidence:.0%} — how much this moves a concrete business metric.",
+        ),
+        SignalScoreComponent(
+            name="strategic_relevance",
+            weight=weights["strategic_relevance"],
+            raw_score=round(strategic_raw, 1),
+            weighted_points=round(weights["strategic_relevance"] * strategic_raw, 1),
+            explanation=f"Strategic relevance confidence {strategic_relevance_confidence:.0%} — competitive/positioning weight beyond immediate product or revenue impact.",
         ),
         SignalScoreComponent(
             name="source_authority",
@@ -52,27 +83,27 @@ def compute_signal_score(
             explanation=f"Source authority {authority_score}/100 — trust weight from curated catalog ({primary_tier} tier).",
         ),
         SignalScoreComponent(
-            name="cross_source_corroboration",
-            weight=weights["cross_source_corroboration"],
-            raw_score=round(cluster_raw, 1),
-            weighted_points=round(weights["cross_source_corroboration"] * cluster_raw, 1),
+            name="trend_momentum",
+            weight=weights["trend_momentum"],
+            raw_score=round(momentum_raw, 1),
+            weighted_points=round(weights["trend_momentum"] * momentum_raw, 1),
             explanation=(
-                f"{cluster_size} source(s) in cluster — "
-                + ("multiple independent sources agree on this signal." if cluster_size > 1 else "single-source signal, no cross-source corroboration yet.")
+                f"{cluster_size} source(s) covering this — "
+                + ("multiple independent sources means real momentum, not a one-off." if cluster_size > 1 else "single-source so far, no corroborated momentum yet.")
             ),
         ),
         SignalScoreComponent(
-            name="evidence_depth",
-            weight=weights["evidence_depth"],
+            name="evidence_strength",
+            weight=weights["evidence_strength"],
             raw_score=round(evidence_raw, 1),
-            weighted_points=round(weights["evidence_depth"] * evidence_raw, 1),
+            weighted_points=round(weights["evidence_strength"] * evidence_raw, 1),
             explanation=f"{evidence_count} grounded evidence item(s) extracted from source text.",
         ),
     ]
 
     total = int(round(sum(c.weighted_points for c in components)))
     total = max(0, min(100, total))
-    recommendation = recommendation_for_score(total)
+    recommendation = recommendation_for_score(total, has_decision=has_decision, category=category)
 
     explanation = (
         f"Signal {total}/100 → {recommendation['recommendation']}. "
@@ -94,25 +125,49 @@ def explain_signal_score(breakdown: SignalScoreBreakdown) -> str:
     return "\n".join(lines)
 
 
-def recommendation_for_score(score: int) -> dict[str, str]:
-    if score >= settings.signal_score_thresholds["read_now"]:
+def recommendation_for_score(score: int, *, has_decision: bool = False, category: str = "") -> dict[str, str]:
+    """Deterministic score-band → grounded PM action label.
+
+    Above the top band, the label branches on whether the source actually
+    supports a concrete decision (has_decision, from the agent's
+    decision_supported field) rather than defaulting every high score to
+    "Read Now" — a high-scoring item with no real decision attached is
+    something to evaluate or benchmark, not necessarily read in full today.
+    """
+    t = settings.signal_score_thresholds
+    if score >= t["read_now"]:
+        if has_decision:
+            return {
+                "recommendation": "Read Now",
+                "reason": "This directly informs a decision you're likely facing — worth reading in full today.",
+            }
+        if category in ("official", "open_source"):
+            return {
+                "recommendation": "Evaluate",
+                "reason": "A high-confidence vendor or tooling change worth hands-on evaluation, even without a specific roadmap call yet.",
+            }
         return {
-            "recommendation": "Read Now",
-            "reason": "High-authority source with strong novelty, impact, and corroboration.",
+            "recommendation": "Compare Against Current Approach",
+            "reason": "Strong signal, but benchmark it against what you're already doing before acting on it.",
         }
-    if score >= settings.signal_score_thresholds["read_this_week"]:
+    if score >= t["watch"]:
         return {
-            "recommendation": "Read This Week",
-            "reason": "Relevant AI PM signal worth reviewing soon.",
+            "recommendation": "Watch",
+            "reason": "Not urgent yet, but worth monitoring — it could become decision-relevant soon.",
         }
-    if score >= settings.signal_score_thresholds["skim"]:
+    if score >= t["skim"]:
         return {
             "recommendation": "Skim",
-            "reason": "Useful context but not urgent for today's product decisions.",
+            "reason": "A quick scan is enough to stay aware; no action needed today.",
+        }
+    if score >= t["file_away"]:
+        return {
+            "recommendation": "File Away",
+            "reason": "Low urgency right now, but may be useful reference later.",
         }
     return {
         "recommendation": "Ignore",
-        "reason": "Low priority for current AI PM focus window.",
+        "reason": "Low relevance to current AI PM priorities.",
     }
 
 

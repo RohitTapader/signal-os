@@ -48,9 +48,16 @@ class ImpactResult(BaseModel):
     pm_takeaway: str = ""
     # Direct, specific strategic callouts for an AI PM — deliberately separate from
     # the more general why_it_matters bullets so a reader gets one concrete "so what"
-    # per axis instead of having to infer it from a paragraph.
+    # per axis instead of having to infer it from a paragraph. roadmap_relevance is
+    # genuinely optional: the skill is instructed to leave it empty rather than
+    # invent a roadmap implication the source doesn't support.
     roadmap_relevance: str = ""
     business_metric_impact: str = ""
+    # Who this is actually for, and what decision it feeds — empty when the source
+    # doesn't support a specific answer. These are what let the recommendation
+    # label be "Read Now" instead of a softer label (see recommendation_for_score).
+    who_should_care: str = ""
+    decision_supported: str = ""
     why_it_matters: dict[str, str | list[str]] = Field(
         default_factory=lambda: {
             "product": "",
@@ -62,11 +69,17 @@ class ImpactResult(BaseModel):
     recommended_action: str = ""
     companies_impacted: list[str] = Field(default_factory=list)
     confidence: float = Field(ge=0, le=1)
+    # Three separate confidence sub-scores driving the signal-score breakdown —
+    # deliberately not one blended "impact" number, so ranking can reflect
+    # product/business/strategic relevance as distinct, explainable factors.
+    product_impact_confidence: float = Field(default=0.0, ge=0, le=1)
+    business_impact_confidence: float = Field(default=0.0, ge=0, le=1)
+    strategic_relevance_confidence: float = Field(default=0.0, ge=0, le=1)
     source_url: str
     supporting_evidence: list[dict[str, str]] = Field(default_factory=list)
     limitations: str = ""
     should_you_read: dict[str, str] = Field(
-        default_factory=lambda: {"recommendation": "Read Later", "reason": ""}
+        default_factory=lambda: {"recommendation": "Watch", "reason": ""}
     )
 
 
@@ -129,6 +142,8 @@ class DigestItem(BaseModel):
     pm_takeaway: str = ""
     roadmap_relevance: str = ""
     business_metric_impact: str = ""
+    who_should_care: str = ""
+    decision_supported: str = ""
     signal_type: str = "general"
     signal_score: int = 0
     signal_score_breakdown: dict | None = None
@@ -141,7 +156,7 @@ class DigestItem(BaseModel):
     companies_impacted: list[str] = Field(default_factory=list)
     confidence: float
     should_you_read: dict[str, str] = Field(
-        default_factory=lambda: {"recommendation": "Read Later", "reason": ""}
+        default_factory=lambda: {"recommendation": "Watch", "reason": ""}
     )
     supporting_evidence: list[dict[str, str]] = Field(default_factory=list)
     limitations: str = ""

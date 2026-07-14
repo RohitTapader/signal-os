@@ -1,13 +1,21 @@
 
 # Signal
 
-Signal is a daily AI-industry intelligence platform with:
+Signal is a decision-support system for AI Product Managers — not a news summarizer. Every
+day it filters trusted sources down to what's genuinely worth a PM's attention, and frames
+each item as a decision briefing (what changed, why it matters to a PM, who should care, what
+decision it informs) with a grounded action label, not a vague "read later." See
+`docs/ADR/0006-pm-decision-support-not-research-digest.md` for the full rationale.
+
+Signal ships with:
 - trusted-source ingestion
 - novelty filtering
-- executive intelligence analysis
-- signal scoring and recommendation
-- Telegram delivery
-- feedback-driven repair proposals
+- PM decision-intelligence synthesis (executive analysis framed as a decision, not a summary)
+- 7-factor PM-relevance signal scoring and a grounded recommendation label (Read Now /
+  Evaluate / Compare Against Current Approach / Watch / Skim / File Away / Ignore)
+- Telegram delivery as text decision briefings
+- feedback-driven, bounded preference adaptation and repair proposals (internal reliability
+  tooling, not a customer-facing feature)
 - offline evaluation
 
 ## What to install
@@ -67,7 +75,7 @@ Signal is a **4-layer AI intelligence system** for Product Managers:
 | 1. Source Intelligence | `signalos/source_intelligence/` | Curated source catalog, authority scores, cross-source clustering, transparent signal scoring |
 | 2. Ingestion | `signalos/ingestion/` | RSS, GitHub, arXiv adapters that fetch from the catalog |
 | 3. Agents | `signalos/agents/` | LLM skills — novelty detection, impact analysis, feedback |
-| 4. Workflows | `signalos/workflows/` | Daily pipeline, Telegram delivery, slide rendering |
+| 4. Workflows | `signalos/workflows/` | Daily pipeline, deterministic PM-relevance scoring, Telegram delivery |
 
 **Source tiers:**
 - **Primary** — Official vendor signals (OpenAI, Google AI, Azure, Hugging Face, NVIDIA, SDK changelogs) + trusted media/community (MIT TR, Latent Space, AI News)
@@ -81,7 +89,7 @@ Signal is a **4-layer AI intelligence system** for Product Managers:
 - `signalos/source_intelligence/` — source registry, scoring breakdown, cross-source clustering
 - `signalos/ingestion/` — RSS / GitHub / arXiv fetch adapters
 - `signalos/agents/` — novelty, impact, feedback, repair agents
-- `signalos/workflows/` — pipeline orchestration, Telegram, slides
+- `signalos/workflows/` — pipeline orchestration, Telegram delivery
 - `signalos/core/` — config, DB, models, LLM routing
 - `signalos/config/sources.yaml` — curated AI PM source catalog
 - `skills/` — OpenClaw-style markdown skills
@@ -101,13 +109,14 @@ See `docs/IMPLEMENTATION_PLAN.md` for the exact file order to paste into Cursor.
 4. Normalization cleans content
 5. Embeddings are created
 6. Novelty skill decides NEW / DUPLICATE / UPDATE
-7. Executive intelligence skill explains what changed and why it matters
-8. Signal score ranks what ships
-9. Slides are rendered
-10. Telegram receives the digest
-11. Telegram feedback is routed back into the system
-12. Safe config updates can be applied
-13. Code repairs are stored for review only
+7. Executive intelligence skill answers what changed, why it matters to a PM, who should
+   care, and what decision it informs
+8. Deterministic 7-factor signal score ranks what ships, and maps to a grounded PM action
+   label (Read Now / Evaluate / Compare Against Current Approach / Watch / Skim / File Away / Ignore)
+9. Telegram receives the decision briefing as text
+10. Telegram feedback is routed back into the system
+11. Safe config/preference updates can be applied
+12. Code repairs are stored for review only
 
 ## Production notes
 

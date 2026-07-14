@@ -16,20 +16,31 @@ def _esc(text: str | None) -> str:
     return html.escape(str(text or "").strip())
 
 
+# Grounded PM action labels — no vague "Read This Week", each one maps to a
+# concrete stance the reader can take. See
+# signalos.source_intelligence.scoring.recommendation_for_score for how the
+# label is chosen (deterministically, from score band + whether a concrete
+# decision/audience is actually grounded in the source).
 PRIORITY_EMOJI = {
     "Read Now": "🔥",
-    "Read This Week": "📌",
+    "Evaluate": "🧪",
+    "Compare Against Current Approach": "⚖️",
+    "Watch": "👁",
     "Skim": "👀",
+    "File Away": "🗂",
     "Ignore": "💤",
 }
 
 # Ties the sign-off to the actual recommendation rather than being random —
 # gives each message a distinct close without turning into a gimmick.
 PRIORITY_SIGNOFF = {
-    "Read Now": "⏱ Act on this today — don't let it sit in the backlog.",
-    "Read This Week": "🗓 Worth a slot in this week's roadmap review.",
-    "Skim": "👀 A 2-minute scan is enough — file it away.",
-    "Ignore": "💤 Low priority — skip unless it's directly in your lane.",
+    "Read Now": "⏱ Act on this today — it directly informs a decision you're facing.",
+    "Evaluate": "🧪 Worth hands-on evaluation before it reaches your roadmap.",
+    "Compare Against Current Approach": "⚖️ Benchmark this against what you're already doing.",
+    "Watch": "👁 Not urgent — add it to your watch list.",
+    "Skim": "👀 A 2-minute scan is enough.",
+    "File Away": "🗂 Low urgency now — keep it for reference.",
+    "Ignore": "💤 Skip unless it's directly in your lane.",
 }
 
 
@@ -43,18 +54,19 @@ def _is_distinct(whats_new: str, executive_summary: str) -> bool:
 
 
 def format_digest_briefing(item: dict[str, Any], *, index: int = 1, total: int = 1) -> str:
-    """Attention-grabbing HTML briefing for an AI PM's daily Telegram feed.
+    """A decision briefing, not a news summary — what changed, why it matters
+    to an AI PM, who should care, and what decision it informs, in that order.
 
-    Designed to be read in a scroll: a scannable eyebrow line, a punchy
-    headline+reason up top (the two things worth reading even if nothing
-    else gets read), tight bullets, a pulled-quote takeaway that breaks the
-    visual pattern, and a recommendation-specific sign-off so a multi-item
-    daily digest doesn't read as the same template five times in a row.
+    Designed to be read in a scroll: a scannable eyebrow line carrying the
+    grounded action label (never a vague "read later"), a punchy headline +
+    plain-English reason up top, tight bullets, a pulled-quote takeaway that
+    breaks the visual pattern, and a recommendation-specific sign-off so a
+    multi-item daily digest doesn't read as the same template five times over.
     """
     rec = item.get("should_you_read") or {}
     why = item.get("why_it_matters") or {}
-    recommendation = rec.get("recommendation", "Read Later")
-    emoji = PRIORITY_EMOJI.get(recommendation, "📌")
+    recommendation = rec.get("recommendation", "Watch")
+    emoji = PRIORITY_EMOJI.get(recommendation, "👁")
     category = _esc(item.get("source_category") or item.get("category_tag", "media"))
     source = _esc(item.get("source_display_name") or item.get("source_name"))
 
@@ -65,6 +77,8 @@ def format_digest_briefing(item: dict[str, Any], *, index: int = 1, total: int =
     ]
     if rec.get("reason"):
         lines.append(f"<i>{_esc(rec['reason'])}</i>")
+    if item.get("who_should_care"):
+        lines.append(f"👤 For: {_esc(item['who_should_care'])}")
     lines.append("")
 
     corroborating = item.get("corroborating_sources") or []
@@ -93,6 +107,9 @@ def format_digest_briefing(item: dict[str, Any], *, index: int = 1, total: int =
         strategic.append(f"🏆 <b>Competitive</b> — {_esc(why['competitive'])}")
     if strategic:
         lines += strategic + [""]
+
+    if item.get("decision_supported"):
+        lines += [f"🧭 <b>Decision this informs:</b> {_esc(item['decision_supported'])}", ""]
 
     if item.get("pm_takeaway"):
         lines += [f"<blockquote>💡 {_esc(item['pm_takeaway'])}</blockquote>", ""]

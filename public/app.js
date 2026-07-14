@@ -16,11 +16,11 @@ function badgeFor(verdict) {
 }
 
 function readBadge(i) {
-  const r = i.impact?.should_you_read?.recommendation || 'Read Later';
+  const r = i.impact?.should_you_read?.recommendation || 'Watch';
   if (r === 'Read Now') return 'pill-good';
-  if (r === 'Read This Week') return 'pill-warn';
-  if (r === 'Skim') return 'pill-warn';
-  return 'pill-bad';
+  if (r === 'Evaluate' || r === 'Compare Against Current Approach' || r === 'Watch') return 'pill-warn';
+  if (r === 'Skim' || r === 'File Away') return 'pill-warn';
+  return 'pill-bad'; // Ignore
 }
 
 async function loadLatest() {

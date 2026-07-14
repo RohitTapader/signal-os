@@ -45,11 +45,14 @@ class Settings(BaseSettings):
     novelty_duplicate_threshold: float = 0.90
     novelty_ambiguous_low_confidence: float = 0.60
 
-    # Signal score thresholds — used by source_intelligence.scoring
+    # Signal score bands — used by source_intelligence.scoring to pick a
+    # grounded PM action label (Read Now / Evaluate / Compare Against Current
+    # Approach / Watch / Skim / File Away / Ignore). Below file_away = Ignore.
     signal_score_thresholds: dict[str, int] = {
         "read_now": 85,
-        "read_this_week": 70,
+        "watch": 70,
         "skim": 50,
+        "file_away": 30,
     }
 
     model_routing: dict[str, str] = {

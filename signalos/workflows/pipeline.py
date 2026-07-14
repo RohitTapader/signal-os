@@ -92,6 +92,8 @@ def _build_digest_item(row: ContentItem, impact: dict, corroborating: list[dict]
         pm_takeaway=impact.get("pm_takeaway", ""),
         roadmap_relevance=impact.get("roadmap_relevance", ""),
         business_metric_impact=impact.get("business_metric_impact", ""),
+        who_should_care=impact.get("who_should_care", ""),
+        decision_supported=impact.get("decision_supported", ""),
         signal_type=impact.get("signal_type", row.source_category),
         signal_score=int(impact.get("signal_score", 0)),
         signal_score_breakdown=impact.get("signal_score_breakdown"),
@@ -109,7 +111,7 @@ def _build_digest_item(row: ContentItem, impact: dict, corroborating: list[dict]
         companies_impacted=(impact.get("companies_impacted") or [])[:5],
         confidence=float(impact.get("confidence", 0.0)),
         should_you_read={
-            "recommendation": impact.get("should_you_read", {}).get("recommendation", "Read Later"),
+            "recommendation": impact.get("should_you_read", {}).get("recommendation", "Watch"),
             "reason": impact.get("should_you_read", {}).get("reason", ""),
         },
         supporting_evidence=(impact.get("supporting_evidence") or [])[:5],
@@ -242,13 +244,18 @@ def _build_digest(
             + [r.authority_score or 70 for r in supporting_rows]
         )
         effective_authority = max(0, min(100, int(max_authority + trust_bias * 100)))
+        has_decision = bool((impact.decision_supported or "").strip())
         breakdown = compute_signal_score(
             novelty_confidence=primary_row.novelty_confidence or 0.0,
-            impact_confidence=impact.confidence,
+            product_impact_confidence=impact.product_impact_confidence,
+            business_impact_confidence=impact.business_impact_confidence,
+            strategic_relevance_confidence=impact.strategic_relevance_confidence,
             authority_score=effective_authority,
             cluster_size=cluster_size,
             evidence_count=len(impact.supporting_evidence),
             primary_tier=primary_row.source_tier or "primary",
+            has_decision=has_decision,
+            category=primary_row.source_category,
         )
 
         # recommendation_strictness is a bounded preference nudge applied only
@@ -256,7 +263,7 @@ def _build_digest(
         strictness = preferences.recommendation_strictness if preferences else 0.5
         strictness_adjustment = int((strictness - 0.5) * 20)  # -10..+10
         rec_score = max(0, min(100, breakdown.total - strictness_adjustment))
-        rec = recommendation_for_score(rec_score)
+        rec = recommendation_for_score(rec_score, has_decision=has_decision, category=primary_row.source_category)
 
         impact = impact.model_copy(update={
             "signal_type": primary_row.source_category,
