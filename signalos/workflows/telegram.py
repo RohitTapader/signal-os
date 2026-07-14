@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import html
-import json
-from pathlib import Path
 from typing import Any
 
 import requests
@@ -25,6 +23,15 @@ PRIORITY_EMOJI = {
     "Ignore": "💤",
 }
 
+# Ties the sign-off to the actual recommendation rather than being random —
+# gives each message a distinct close without turning into a gimmick.
+PRIORITY_SIGNOFF = {
+    "Read Now": "⏱ Act on this today — don't let it sit in the backlog.",
+    "Read This Week": "🗓 Worth a slot in this week's roadmap review.",
+    "Skim": "👀 A 2-minute scan is enough — file it away.",
+    "Ignore": "💤 Low priority — skip unless it's directly in your lane.",
+}
+
 
 def _is_distinct(whats_new: str, executive_summary: str) -> bool:
     """Only show 'What's new' when it says something the executive summary
@@ -35,20 +42,26 @@ def _is_distinct(whats_new: str, executive_summary: str) -> bool:
     return whats_new.lower() not in (executive_summary or "").lower()
 
 
-def format_digest_briefing(item: dict[str, Any]) -> str:
-    """Rich HTML briefing for AI PMs — sent as text before slide images."""
+def format_digest_briefing(item: dict[str, Any], *, index: int = 1, total: int = 1) -> str:
+    """Attention-grabbing HTML briefing for an AI PM's daily Telegram feed.
+
+    Designed to be read in a scroll: a scannable eyebrow line, a punchy
+    headline+reason up top (the two things worth reading even if nothing
+    else gets read), tight bullets, a pulled-quote takeaway that breaks the
+    visual pattern, and a recommendation-specific sign-off so a multi-item
+    daily digest doesn't read as the same template five times in a row.
+    """
     rec = item.get("should_you_read") or {}
     why = item.get("why_it_matters") or {}
     recommendation = rec.get("recommendation", "Read Later")
     emoji = PRIORITY_EMOJI.get(recommendation, "📌")
+    category = _esc(item.get("source_category") or item.get("category_tag", "media"))
+    source = _esc(item.get("source_display_name") or item.get("source_name"))
 
+    counter = f" · Signal {index}/{total} today" if total > 1 else ""
     lines: list[str] = [
+        f"{emoji} <b>{_esc(recommendation).upper()}</b> · {category} · {source}{counter}",
         f"<b>{_esc(item.get('headline'))}</b>",
-        (
-            f"{_esc(item.get('source_display_name') or item.get('source_name'))} • "
-            f"{_esc(item.get('source_category') or item.get('category_tag', 'media'))} • "
-            f"{emoji} <b>{_esc(recommendation)}</b>"
-        ),
     ]
     if rec.get("reason"):
         lines.append(f"<i>{_esc(rec['reason'])}</i>")
@@ -57,37 +70,35 @@ def format_digest_briefing(item: dict[str, Any]) -> str:
     corroborating = item.get("corroborating_sources") or []
     if corroborating:
         names = ", ".join(_esc(c.get("display_name", "")) for c in corroborating[:4])
-        lines += [f"<b>Cross-source cluster</b> ({item.get('source_count', 1)} sources)", f"Also covered by: {names}", ""]
+        lines += [f"🔗 <b>Confirmed by {item.get('source_count', 1)} sources</b> — also covered by {names}", ""]
 
     if item.get("executive_summary"):
-        lines += ["<b>Executive summary</b>", _esc(item["executive_summary"]), ""]
+        lines += [_esc(item["executive_summary"]), ""]
 
     if _is_distinct(item.get("whats_new", ""), item.get("executive_summary", "")):
-        lines += ["<b>What's new</b>", _esc(item["whats_new"]), ""]
+        lines += [f"🆕 {_esc(item['whats_new'])}", ""]
 
     bullets = item.get("what_changed") or []
     if bullets:
-        lines.append("<b>Key changes</b>")
-        lines.extend(f"• {_esc(b)}" for b in bullets[:4])
+        lines.append("<b>What changed</b>")
+        lines.extend(f"▸ {_esc(b)}" for b in bullets[:4])
         lines.append("")
 
-    if item.get("key_innovation"):
-        lines += ["<b>Key innovation</b>", _esc(item["key_innovation"]), ""]
-
+    strategic: list[str] = []
     if item.get("roadmap_relevance"):
-        lines += ["<b>🎯 Roadmap relevance</b>", _esc(item["roadmap_relevance"]), ""]
-
+        strategic.append(f"🎯 <b>Roadmap</b> — {_esc(item['roadmap_relevance'])}")
     if item.get("business_metric_impact"):
-        lines += ["<b>💰 Business metric impact</b>", _esc(item["business_metric_impact"]), ""]
-
+        strategic.append(f"💰 <b>Business metric</b> — {_esc(item['business_metric_impact'])}")
     if why.get("competitive"):
-        lines += ["<b>🏆 Competitive read</b>", _esc(why["competitive"]), ""]
+        strategic.append(f"🏆 <b>Competitive</b> — {_esc(why['competitive'])}")
+    if strategic:
+        lines += strategic + [""]
 
     if item.get("pm_takeaway"):
-        lines += ["<b>PM takeaway</b>", _esc(item["pm_takeaway"]), ""]
+        lines += [f"<blockquote>💡 {_esc(item['pm_takeaway'])}</blockquote>", ""]
 
     if item.get("recommended_action"):
-        lines += ["<b>Recommended action</b>", _esc(item["recommended_action"]), ""]
+        lines += [f"✅ <b>Do this:</b> {_esc(item['recommended_action'])}", ""]
 
     links: list[str] = []
     if item.get("source_url"):
@@ -103,11 +114,10 @@ def format_digest_briefing(item: dict[str, Any]) -> str:
     if links:
         lines.append("<b>Sources</b>")
         for url in links[:5]:
-            lines.append(f'• <a href="{_esc(url)}">{_esc(url)}</a>')
+            lines.append(f'▸ <a href="{_esc(url)}">{_esc(url)}</a>')
         lines.append("")
 
-    if item.get("limitations"):
-        lines += ["<b>Limitations</b>", _esc(item["limitations"]), ""]
+    lines.append(PRIORITY_SIGNOFF.get(recommendation, ""))
 
     text = "\n".join(lines).strip()
     if len(text) <= TELEGRAM_TEXT_LIMIT:
@@ -115,12 +125,9 @@ def format_digest_briefing(item: dict[str, Any]) -> str:
     return text[: TELEGRAM_TEXT_LIMIT - 20] + "\n\n<i>(truncated)</i>"
 
 
-def _post(method: str, payload: dict[str, Any] | None = None, files: dict[str, Any] | None = None):
+def _post(method: str, payload: dict[str, Any] | None = None):
     url = f"{BASE}/{method}"
-    if files:
-        resp = requests.post(url, data=payload or {}, files=files, timeout=30)
-    else:
-        resp = requests.post(url, json=payload or {}, timeout=30)
+    resp = requests.post(url, json=payload or {}, timeout=30)
     resp.raise_for_status()
     return resp.json()
 
@@ -135,28 +142,6 @@ def send_message(chat_id: str, text: str, reply_markup: dict[str, Any] | None = 
 def answer_callback_query(callback_query_id: str, text: str = ""):
     payload = {"callback_query_id": callback_query_id, "text": text}
     return _post("answerCallbackQuery", payload)
-
-
-def send_media_group(chat_id: str, image_paths: list[str], caption: str | None = None):
-    media = []
-    files = {}
-    for i, path in enumerate(image_paths):
-        key = f"file{i}"
-        files[key] = open(path, "rb")
-        item = {"type": "photo", "media": f"attach://{key}"}
-        if i == 0 and caption:
-            item["caption"] = caption
-        media.append(item)
-
-    try:
-        payload = {"chat_id": chat_id, "media": json.dumps(media)}
-        return _post("sendMediaGroup", payload, files=files)
-    finally:
-        for f in files.values():
-            try:
-                f.close()
-            except Exception:
-                pass
 
 
 def set_webhook(webhook_url: str):

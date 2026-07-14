@@ -33,17 +33,6 @@ class NoveltyResult(BaseModel):
     similar_item_ids: list[int] = Field(default_factory=list)
 
 
-class ChartSeriesPoint(BaseModel):
-    label: str
-    value: float
-
-
-class ChartData(BaseModel):
-    title: str
-    unit: str = ""
-    series: list[ChartSeriesPoint] = Field(default_factory=list)
-
-
 class ImpactResult(BaseModel):
     # Executive intelligence fields. These are intentionally richer than a plain summary.
     signal_type: str = "general"
@@ -79,9 +68,6 @@ class ImpactResult(BaseModel):
     should_you_read: dict[str, str] = Field(
         default_factory=lambda: {"recommendation": "Read Later", "reason": ""}
     )
-    # Only populated when the source text contains genuine comparable numbers
-    # (pricing, benchmark scores, latency, adoption figures). Never fabricated.
-    chart_data: ChartData | None = None
 
 
 class PreferenceProfile(BaseModel):
@@ -151,7 +137,6 @@ class DigestItem(BaseModel):
     source_count: int = 1
     what_changed: list[str]
     why_it_matters: dict[str, str | list[str]]
-    chart_data: dict | None = None
     recommended_action: str = ""
     companies_impacted: list[str] = Field(default_factory=list)
     confidence: float
@@ -161,7 +146,6 @@ class DigestItem(BaseModel):
     supporting_evidence: list[dict[str, str]] = Field(default_factory=list)
     limitations: str = ""
     published_at: str | None = None
-    slides: list[str] = Field(default_factory=list)
 
 
 class RunSummary(BaseModel):

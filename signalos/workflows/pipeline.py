@@ -4,10 +4,8 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from dateutil import parser as date_parser
 from sqlalchemy import select
 
 from signalos.agents.impact_agent import analyze_impact
@@ -24,8 +22,6 @@ from signalos.source_intelligence.clustering import cluster_items, pick_primary_
 from signalos.source_intelligence.scoring import compute_signal_score, recommendation_for_score
 from signalos.workflows.embeddings import embed_item, embedding_to_json
 from signalos.workflows.normalize import normalize_item
-from signalos.workflows.render import render_slide
-from signalos.workflows.telegram import notify_digest_button, send_media_group
 from signalos.workflows.validation import validate_item
 
 
@@ -109,7 +105,6 @@ def _build_digest_item(row: ContentItem, impact: dict, corroborating: list[dict]
             "competitive": impact.get("why_it_matters", {}).get("competitive", ""),
             "product_business": impact.get("why_it_matters", {}).get("product_business", []),
         },
-        chart_data=impact.get("chart_data"),
         recommended_action=impact.get("recommended_action", ""),
         companies_impacted=(impact.get("companies_impacted") or [])[:5],
         confidence=float(impact.get("confidence", 0.0)),
@@ -120,17 +115,7 @@ def _build_digest_item(row: ContentItem, impact: dict, corroborating: list[dict]
         supporting_evidence=(impact.get("supporting_evidence") or [])[:5],
         limitations=impact.get("limitations", ""),
         published_at=row.published_at,
-        slides=[],
     )
-
-
-def _format_slide_date(published_at: str | None) -> str:
-    if not published_at:
-        return ""
-    try:
-        return date_parser.parse(published_at).strftime("%b %d, %Y")
-    except (ValueError, OverflowError):
-        return ""
 
 
 def fetch_all_sources() -> list[SourceItem]:
@@ -300,66 +285,6 @@ def _build_digest(
             digest_items.append(digest)
 
     digest_items.sort(key=lambda d: d.signal_score, reverse=True)
-
-    for d in digest_items:
-        row = db.get(ContentItem, d.item_id)
-        if not row or not row.impact_json:
-            continue
-        base_path = Path("/tmp") / f"signal_{run_id}_{row.id}"
-        recommendation = d.should_you_read.get("recommendation", "Read Later")
-        recommendation_reason = d.should_you_read.get("reason", "")
-        footer = {"source_logo_text": d.source_display_name, "date": _format_slide_date(d.published_at)}
-
-        slides = [render_slide("hook", {
-            **footer,
-            "category_tag": d.source_category,
-            "headline": d.headline,
-            "executive_summary": d.executive_summary,
-            "whats_new": d.whats_new,
-            "recommendation": recommendation,
-            "recommendation_reason": recommendation_reason,
-        }, str(base_path) + "_1.png")]
-
-        slides.append(render_slide("what_changed", {
-            **footer,
-            "category_tag": d.source_category,
-            "bullets": d.what_changed,
-            "key_innovation": d.key_innovation,
-            "source_url": d.source_url,
-        }, str(base_path) + "_2.png"))
-
-        slides.append(render_slide("strategic_impact", {
-            **footer,
-            "category_tag": d.source_category,
-            "roadmap_relevance": d.roadmap_relevance,
-            "business_metric_impact": d.business_metric_impact,
-            "competitive_impact": d.why_it_matters.get("competitive", ""),
-            "product_business_bullets": d.why_it_matters.get("product_business", []),
-        }, str(base_path) + "_3.png"))
-
-        slide_idx = 4
-        if d.chart_data and (d.chart_data.get("series") or []):
-            slides.append(render_slide("chart", {
-                **footer,
-                "category_tag": d.source_category,
-                "chart": d.chart_data,
-            }, str(base_path) + f"_{slide_idx}.png"))
-            slide_idx += 1
-
-        source_links = [d.source_url] + [c.get("url", "") for c in d.corroborating_sources]
-        slides.append(render_slide("recommendation", {
-            **footer,
-            "category_tag": d.source_category,
-            "recommendation": recommendation,
-            "recommendation_reason": recommendation_reason,
-            "recommended_action": d.recommended_action,
-            "pm_takeaway": d.pm_takeaway,
-            "source_links": source_links,
-        }, str(base_path) + f"_{slide_idx}.png"))
-
-        d.slides = slides
-        db.commit()
-
     return digest_items
 
 
@@ -510,13 +435,9 @@ def run_and_send_digest() -> dict:
 
 
 def send_to_telegram(digest_items: list[dict], run_id: str) -> None:
-    from signalos.workflows.telegram import format_digest_briefing, notify_digest_button, send_media_group, send_message
+    from signalos.workflows.telegram import format_digest_briefing, notify_digest_button, send_message
     chat_id = settings.telegram_chat_id
-    for item in digest_items:
-        send_message(chat_id, format_digest_briefing(item))
-        caption = (
-            f"{item['headline']} • {item['signal_score']}/100 • "
-            f"{item.get('should_you_read', {}).get('recommendation', 'Read Later')}"
-        )
-        send_media_group(chat_id, item["slides"], caption=caption)
+    total = len(digest_items)
+    for idx, item in enumerate(digest_items, start=1):
+        send_message(chat_id, format_digest_briefing(item, index=idx, total=total))
     notify_digest_button(chat_id)

@@ -27,7 +27,6 @@ FALLBACK_IMPACT = {
     "supporting_evidence": [],
     "limitations": "",
     "should_you_read": {"recommendation": "Read Later", "reason": "Validation fallback"},
-    "chart_data": None,
 }
 
 
@@ -75,23 +74,6 @@ def _normalize_evidence(
             "source_url": str(source_url),
         })
     return normalized
-
-
-def _normalize_chart_data(raw: dict[str, Any] | None) -> dict[str, Any] | None:
-    if not raw or not isinstance(raw, dict):
-        return None
-    series = raw.get("series") or []
-    clean_series = []
-    for point in series[:5]:
-        try:
-            clean_series.append({"label": str(point.get("label", ""))[:40], "value": float(point.get("value"))})
-        except (TypeError, ValueError):
-            continue
-    if len(clean_series) < 2:
-        # A "chart" with 0-1 comparable points isn't a chart — drop it rather
-        # than render a single meaningless bar.
-        return None
-    return {"title": str(raw.get("title", ""))[:80], "unit": str(raw.get("unit", ""))[:12], "series": clean_series}
 
 
 def _preference_block(preferences: PreferenceProfile | None) -> str:
@@ -145,7 +127,9 @@ def analyze_impact(
             )
 
     prompt = f"""
-You are generating executive intelligence for a senior AI Product Manager.
+You are a sharp tech/business newsletter editor writing for a senior AI Product Manager who
+gets this as one of several items in a daily Telegram digest. Make them stop scrolling for
+this one — sharp and specific, never generic, never sensationalized beyond what the source supports.
 
 PRIMARY SOURCE: {item.display_name or item.source_name} ({item.source_category})
 TITLE: {item.title}
@@ -155,7 +139,10 @@ URL: {item.url}
 {_angle_block(user_angle)}
 
 Rules:
+- headline: sharp and specific — lead with the number, deadline, or competitive angle that actually
+  matters to a PM, not a generic "X launches Y" label. Max 14 words.
 - executive_summary: 2-3 sentences, decision-oriented — what happened and why it matters, stated directly.
+  No throat-clearing.
 - whats_new: ONE short sentence, only if it adds something not already in executive_summary. Otherwise "".
 - what_changed: 3-4 bullets max, each a specific, concrete delta — not a restatement of the headline.
 - roadmap_relevance: 1-2 sentences, a SPECIFIC actionable implication for a PM's roadmap/backlog this quarter.
@@ -165,9 +152,8 @@ Rules:
 - why_it_matters.product_business: 3-4 bullets — supporting detail NOT already covered by roadmap_relevance
   or business_metric_impact.
 - why_it_matters.competitive: 2-3 sentences on competitive positioning.
-- pm_takeaway: 2-3 punchy sentences — the one thing to remember and act on.
-- chart_data: ONLY if the source has genuinely comparable numeric data (pricing, benchmark scores, latency,
-  adoption counts, before/after). Real numbers only, up to 5 points. Otherwise null.
+- pm_takeaway: 2-3 punchy, quotable sentences — this gets pulled out as a standalone highlighted quote in
+  the digest, so it must stand alone. The one thing to remember and act on.
 - supporting_evidence: 2-3 items, each just claim and source_url (use {item.url} or corroborating URLs). No quotes.
 - should_you_read.reason: one plain-English sentence — must make sense to someone with zero knowledge of any
   internal scoring system.
@@ -194,8 +180,7 @@ Return JSON only:
   "source_url": "{item.url}",
   "supporting_evidence": [{{"claim": "...", "source_url": "https://..."}}],
   "limitations": "...",
-  "should_you_read": {{"recommendation": "...", "reason": "..."}},
-  "chart_data": {{"title": "...", "unit": "...", "series": [{{"label": "...", "value": 0}}]}} or null
+  "should_you_read": {{"recommendation": "...", "reason": "..."}}
 }}
 
 SOURCE TEXT:
@@ -223,5 +208,4 @@ SOURCE TEXT:
         "reason": (merged.get("should_you_read") or {}).get("reason", ""),
     }
     merged["source_url"] = str(item.url)
-    merged["chart_data"] = _normalize_chart_data(merged.get("chart_data"))
     return ImpactResult(**merged)
