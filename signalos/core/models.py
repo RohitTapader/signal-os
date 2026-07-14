@@ -79,7 +79,7 @@ class ImpactResult(BaseModel):
     supporting_evidence: list[dict[str, str]] = Field(default_factory=list)
     limitations: str = ""
     should_you_read: dict[str, str] = Field(
-        default_factory=lambda: {"recommendation": "Watch", "reason": ""}
+        default_factory=lambda: {"recommendation": "Skim", "reason": ""}
     )
 
 
@@ -156,7 +156,7 @@ class DigestItem(BaseModel):
     companies_impacted: list[str] = Field(default_factory=list)
     confidence: float
     should_you_read: dict[str, str] = Field(
-        default_factory=lambda: {"recommendation": "Watch", "reason": ""}
+        default_factory=lambda: {"recommendation": "Skim", "reason": ""}
     )
     supporting_evidence: list[dict[str, str]] = Field(default_factory=list)
     limitations: str = ""

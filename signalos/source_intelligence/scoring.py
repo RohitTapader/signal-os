@@ -15,7 +15,6 @@ def compute_signal_score(
     evidence_count: int,
     primary_tier: str = "primary",
     has_decision: bool = False,
-    category: str = "",
 ) -> SignalScoreBreakdown:
     """Transparent, PM-relevant signal score with a per-component breakdown.
 
@@ -103,7 +102,7 @@ def compute_signal_score(
 
     total = int(round(sum(c.weighted_points for c in components)))
     total = max(0, min(100, total))
-    recommendation = recommendation_for_score(total, has_decision=has_decision, category=category)
+    recommendation = recommendation_for_score(total, has_decision=has_decision)
 
     explanation = (
         f"Signal {total}/100 → {recommendation['recommendation']}. "
@@ -125,40 +124,30 @@ def explain_signal_score(breakdown: SignalScoreBreakdown) -> str:
     return "\n".join(lines)
 
 
-def recommendation_for_score(score: int, *, has_decision: bool = False, category: str = "") -> dict[str, str]:
+def recommendation_for_score(score: int, *, has_decision: bool = False) -> dict[str, str]:
     """Deterministic score-band → grounded PM action label.
 
-    Above the top band, the label branches on whether the source actually
-    supports a concrete decision (has_decision, from the agent's
-    decision_supported field) rather than defaulting every high score to
-    "Read Now" — a high-scoring item with no real decision attached is
-    something to evaluate or benchmark, not necessarily read in full today.
+    Four labels only: Read, Skim, File Away, Ignore. Read and Skim are the
+    only labels delivered to Telegram; File Away is stored but not sent;
+    Ignore is not persisted at all (see signalos.workflows.pipeline._build_digest).
+    has_decision (from the agent's decision_supported field) only changes the
+    *reason* text within the top band, not the label itself.
     """
     t = settings.signal_score_thresholds
-    if score >= t["read_now"]:
+    if score >= t["read"]:
         if has_decision:
             return {
-                "recommendation": "Read Now",
+                "recommendation": "Read",
                 "reason": "This directly informs a decision you're likely facing — worth reading in full today.",
             }
-        if category in ("official", "open_source"):
-            return {
-                "recommendation": "Evaluate",
-                "reason": "A high-confidence vendor or tooling change worth hands-on evaluation, even without a specific roadmap call yet.",
-            }
         return {
-            "recommendation": "Compare Against Current Approach",
-            "reason": "Strong signal, but benchmark it against what you're already doing before acting on it.",
-        }
-    if score >= t["watch"]:
-        return {
-            "recommendation": "Watch",
-            "reason": "Not urgent yet, but worth monitoring — it could become decision-relevant soon.",
+            "recommendation": "Read",
+            "reason": "High-confidence, high-relevance signal — worth reading in full today.",
         }
     if score >= t["skim"]:
         return {
             "recommendation": "Skim",
-            "reason": "A quick scan is enough to stay aware; no action needed today.",
+            "reason": "Relevant, but a quick scan is enough — no immediate action needed.",
         }
     if score >= t["file_away"]:
         return {

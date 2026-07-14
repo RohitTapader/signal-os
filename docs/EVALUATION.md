@@ -12,7 +12,10 @@ Offline evaluation is needed before rollout to verify quality, trustworthiness, 
 quality, and cost — but "quality" here means **usefulness to an AI PM's decision-making**,
 not summarization quality in the abstract. A fluent, well-cited summary of a paper with no
 product/business/strategic angle is not a success case for Signal; it should score low and
-carry a low-urgency label (Skim / File Away / Ignore), not get inflated into "Read Now."
+carry a low-urgency label (Skim / File Away / Ignore), not get inflated into "Read." Note that
+only Read and Skim items are delivered to Telegram — File Away is stored but not sent, and
+Ignore is not persisted at all — so a mis-scored item doesn't just rank wrong, it either
+reaches the user's feed when it shouldn't, or is silently dropped when it shouldn't be.
 
 ## Benchmark datasets
 1. Historical golden set of source items
@@ -58,8 +61,11 @@ carry a low-urgency label (Skim / File Away / Ignore), not get inflated into "Re
   is: *would this change a PM's decision, or does it merely inform them?* Items that only
   inform should not outrank items that change a decision, even if the informational item is
   more novel or better-written.
-- label distribution sanity — "Read Now" should be rare (reserved for items with a genuinely
-  grounded decision), not the default outcome for every high-novelty item
+- label distribution sanity — "Read" should be reserved for genuinely top-tier items, not the
+  default outcome for every high-novelty item
+- **storage/delivery correctness** — Read/Skim items are delivered to Telegram, File Away
+  items are stored but not delivered, Ignore items are not persisted; verify no label crosses
+  a boundary it shouldn't (e.g. a File Away item accidentally reaching Telegram)
 
 ### End-to-end
 - digest usefulness (PM-judged, not summarization-judged)
@@ -70,12 +76,11 @@ carry a low-urgency label (Skim / File Away / Ignore), not get inflated into "Re
 ## Human review guidance
 When reviewing a digest item, the reviewer should ask two questions in order:
 1. **Would this change what an AI PM does this week** (roadmap, vendor choice, pricing,
-   competitive response)? If yes, the label should be at or near "Read Now" / "Evaluate" /
-   "Compare Against Current Approach."
+   competitive response)? If yes, the label should be "Read."
 2. If it would only inform them (interesting, no decision attached), the label should be
-   "Watch," "Skim," or "File Away" — and `decision_supported` should be empty. A reviewer
-   who finds a populated `roadmap_relevance` or `decision_supported` on an item that doesn't
-   actually support one should flag it as a groundedness failure, not a stylistic nitpick.
+   "Skim" or "File Away" — and `decision_supported` should be empty. A reviewer who finds a
+   populated `roadmap_relevance` or `decision_supported` on an item that doesn't actually
+   support one should flag it as a groundedness failure, not a stylistic nitpick.
 
 ## Launch gates
 Do not launch unless:
@@ -83,7 +88,7 @@ Do not launch unless:
 - groundedness is high, including near-zero manufactured roadmap/decision claims
 - signal score ordering reflects genuine PM relevance, verified against the PM-relevance
   labeled set, not just novelty/authority
-- recommendation labels are meaningfully differentiated and rarely default to "Read Now"
+- recommendation labels are meaningfully differentiated and "Read" isn't the default outcome
 - delivery is stable
 - repair flow is approval-gated
 - cost remains under cap

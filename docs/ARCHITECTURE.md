@@ -45,8 +45,10 @@ judgment call — never for anything ranking- or delivery-related:
 
 Notably, **the recommendation label itself is not agent output.** The product-impact skill
 estimates confidence sub-scores and states whether a concrete decision/audience is grounded
-in the source; `recommendation_for_score()` (deterministic) turns that into one of the seven
-PM action labels. This keeps ranking auditable and reproducible independent of LLM variance.
+in the source; `recommendation_for_score()` (deterministic) turns that into one of four PM
+action labels — Read, Skim, File Away, Ignore. This keeps ranking auditable and reproducible
+independent of LLM variance. Only Read and Skim are delivered to Telegram; File Away is stored
+but not sent; Ignore is not persisted at all (see ADR 0006).
 
 ### Data layer
 - PostgreSQL in production
@@ -64,9 +66,10 @@ PM action labels. This keeps ranking auditable and reproducible independent of L
    product/business/strategic confidence sub-scores.
 6. Deterministic signal scoring combines novelty, product impact, business impact, strategic
    relevance, source authority, trend momentum, and evidence strength into one explainable score.
-7. A deterministic mapping turns the score (plus whether a concrete decision is grounded) into
-   one of seven PM action labels — never a raw number, never LLM-chosen.
-8. The digest briefing is composed as Telegram-native text.
+7. A deterministic mapping turns the score into one of four PM action labels (Read / Skim /
+   File Away / Ignore) — never a raw number, never LLM-chosen.
+8. Read and Skim items are composed as Telegram-native text; File Away is stored only; Ignore
+   is dropped without being persisted.
 9. Telegram delivers the decision briefing with feedback buttons.
 10. Feedback is captured and classified.
 11. RCA runs on systemic failures (internal reliability only).

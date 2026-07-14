@@ -111,7 +111,7 @@ def _build_digest_item(row: ContentItem, impact: dict, corroborating: list[dict]
         companies_impacted=(impact.get("companies_impacted") or [])[:5],
         confidence=float(impact.get("confidence", 0.0)),
         should_you_read={
-            "recommendation": impact.get("should_you_read", {}).get("recommendation", "Watch"),
+            "recommendation": impact.get("should_you_read", {}).get("recommendation", "Skim"),
             "reason": impact.get("should_you_read", {}).get("reason", ""),
         },
         supporting_evidence=(impact.get("supporting_evidence") or [])[:5],
@@ -255,7 +255,6 @@ def _build_digest(
             evidence_count=len(impact.supporting_evidence),
             primary_tier=primary_row.source_tier or "primary",
             has_decision=has_decision,
-            category=primary_row.source_category,
         )
 
         # recommendation_strictness is a bounded preference nudge applied only
@@ -263,7 +262,15 @@ def _build_digest(
         strictness = preferences.recommendation_strictness if preferences else 0.5
         strictness_adjustment = int((strictness - 0.5) * 20)  # -10..+10
         rec_score = max(0, min(100, breakdown.total - strictness_adjustment))
-        rec = recommendation_for_score(rec_score, has_decision=has_decision, category=primary_row.source_category)
+        rec = recommendation_for_score(rec_score, has_decision=has_decision)
+
+        if rec["recommendation"] == "Ignore":
+            # Ignore-tier items are not persisted at all — no impact_json, no
+            # digest_item. The bare ContentItem row from ingestion still
+            # exists (needed for novelty dedup on future runs), but nothing
+            # about this analysis is stored or shown.
+            log_json("item_not_stored", item_id=primary_row.id, score=rec_score, reason="ignore_tier")
+            continue
 
         impact = impact.model_copy(update={
             "signal_type": primary_row.source_category,
@@ -432,19 +439,31 @@ def regenerate_from_cache(run_id: str | None = None, *, angle: str | None = None
         db.close()
 
 
+# Only these two labels are ever pushed to Telegram. File Away is stored
+# (see _build_digest) and reachable via the dashboard/API, but doesn't reach
+# the user's feed. Ignore is never stored at all.
+TELEGRAM_SHOWN_RECOMMENDATIONS = {"Read", "Skim"}
+
+
 def run_and_send_digest() -> dict:
     run_id = str(uuid.uuid4())
     items = fetch_all_sources()
     summary = generate_digest_from_items(items, run_id=run_id)
-    if summary["digest_items"]:
-        send_to_telegram(summary["digest_items"], run_id=run_id)
+    summary["sent_to_telegram"] = send_to_telegram(summary["digest_items"], run_id=run_id) if summary["digest_items"] else 0
     return summary
 
 
-def send_to_telegram(digest_items: list[dict], run_id: str) -> None:
+def send_to_telegram(digest_items: list[dict], run_id: str) -> int:
+    """Sends only Read/Skim items to Telegram. Returns the count actually sent."""
     from signalos.workflows.telegram import format_digest_briefing, notify_digest_button, send_message
     chat_id = settings.telegram_chat_id
-    total = len(digest_items)
-    for idx, item in enumerate(digest_items, start=1):
+    shown = [
+        item for item in digest_items
+        if item.get("should_you_read", {}).get("recommendation") in TELEGRAM_SHOWN_RECOMMENDATIONS
+    ]
+    total = len(shown)
+    for idx, item in enumerate(shown, start=1):
         send_message(chat_id, format_digest_briefing(item, index=idx, total=total))
-    notify_digest_button(chat_id)
+    if shown:
+        notify_digest_button(chat_id)
+    return total

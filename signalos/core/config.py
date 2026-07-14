@@ -46,11 +46,11 @@ class Settings(BaseSettings):
     novelty_ambiguous_low_confidence: float = 0.60
 
     # Signal score bands — used by source_intelligence.scoring to pick a
-    # grounded PM action label (Read Now / Evaluate / Compare Against Current
-    # Approach / Watch / Skim / File Away / Ignore). Below file_away = Ignore.
+    # grounded PM action label: Read / Skim / File Away / Ignore. Only Read and
+    # Skim are delivered to Telegram; File Away is stored but not sent; Ignore
+    # is not persisted at all (see signalos.workflows.pipeline._build_digest).
     signal_score_thresholds: dict[str, int] = {
-        "read_now": 85,
-        "watch": 70,
+        "read": 85,
         "skim": 50,
         "file_away": 30,
     }

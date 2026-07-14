@@ -81,8 +81,15 @@ def _send_regenerated_digest(chat_id: str, summary: dict) -> None:
     if not summary["digest_items"]:
         send_message(chat_id, _no_new_info_message(summary))
         return
-    send_to_telegram(summary["digest_items"], run_id=summary["run_id"])
-    send_message(chat_id, f"Regenerated — {len(summary['digest_items'])} item(s) sent above.")
+    sent = send_to_telegram(summary["digest_items"], run_id=summary["run_id"])
+    if sent == 0:
+        send_message(
+            chat_id,
+            f"Found {len(summary['digest_items'])} item(s) today, but none reached Read/Skim priority — "
+            "filed away for reference rather than sent.",
+        )
+        return
+    send_message(chat_id, f"Regenerated — {sent} item(s) sent above.")
 
 
 def route_telegram_update(update: dict) -> None:

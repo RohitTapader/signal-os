@@ -16,9 +16,8 @@ function badgeFor(verdict) {
 }
 
 function readBadge(i) {
-  const r = i.impact?.should_you_read?.recommendation || 'Watch';
-  if (r === 'Read Now') return 'pill-good';
-  if (r === 'Evaluate' || r === 'Compare Against Current Approach' || r === 'Watch') return 'pill-warn';
+  const r = i.impact?.should_you_read?.recommendation || 'Skim';
+  if (r === 'Read') return 'pill-good';
   if (r === 'Skim' || r === 'File Away') return 'pill-warn';
   return 'pill-bad'; // Ignore
 }

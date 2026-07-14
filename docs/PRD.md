@@ -27,8 +27,9 @@ Primary:
 - Know whether it is actually new
 - Understand why it matters *to an AI PM specifically* — not just "why it's interesting"
 - Know who should care and what decision it informs
-- Decide what to do about it: read now, evaluate, compare against current approach, watch,
-  skim, file away, or ignore — never a vague "read later"
+- Decide what to do about it: Read, Skim, File Away, or Ignore — never a vague "read later".
+  Only Read and Skim items reach the daily Telegram feed; File Away items are kept in the
+  backend for reference but not pushed; Ignore items aren't stored at all.
 - Drill into the source evidence
 - Report issues and have the system improve safely
 
@@ -91,7 +92,7 @@ Launch only after:
 - offline novelty benchmark passes
 - executive intelligence is grounded, evidence-backed, and free of manufactured roadmap/metric claims
 - signal score ordering reflects genuine PM relevance, not just novelty
-- recommendation labels are meaningfully differentiated (a PM reading "Read Now" vs "Watch"
+- recommendation labels are meaningfully differentiated (a PM reading "Read" vs "Skim"
   should be able to tell why without reading the score breakdown)
 - Telegram delivery is stable
 - repair proposals require approval

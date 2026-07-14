@@ -16,16 +16,15 @@ def _esc(text: str | None) -> str:
     return html.escape(str(text or "").strip())
 
 
-# Grounded PM action labels — no vague "Read This Week", each one maps to a
-# concrete stance the reader can take. See
+# Grounded PM action labels. Only Read and Skim are ever delivered to
+# Telegram (signalos.workflows.pipeline.TELEGRAM_SHOWN_RECOMMENDATIONS) —
+# File Away and Ignore never reach format_digest_briefing in practice, but
+# the maps stay complete for dashboard/debug rendering. See
 # signalos.source_intelligence.scoring.recommendation_for_score for how the
 # label is chosen (deterministically, from score band + whether a concrete
-# decision/audience is actually grounded in the source).
+# decision is actually grounded in the source).
 PRIORITY_EMOJI = {
-    "Read Now": "🔥",
-    "Evaluate": "🧪",
-    "Compare Against Current Approach": "⚖️",
-    "Watch": "👁",
+    "Read": "🔥",
     "Skim": "👀",
     "File Away": "🗂",
     "Ignore": "💤",
@@ -34,12 +33,9 @@ PRIORITY_EMOJI = {
 # Ties the sign-off to the actual recommendation rather than being random —
 # gives each message a distinct close without turning into a gimmick.
 PRIORITY_SIGNOFF = {
-    "Read Now": "⏱ Act on this today — it directly informs a decision you're facing.",
-    "Evaluate": "🧪 Worth hands-on evaluation before it reaches your roadmap.",
-    "Compare Against Current Approach": "⚖️ Benchmark this against what you're already doing.",
-    "Watch": "👁 Not urgent — add it to your watch list.",
+    "Read": "⏱ Act on this today.",
     "Skim": "👀 A 2-minute scan is enough.",
-    "File Away": "🗂 Low urgency now — keep it for reference.",
+    "File Away": "🗂 Low urgency now — kept for reference.",
     "Ignore": "💤 Skip unless it's directly in your lane.",
 }
 
@@ -65,7 +61,7 @@ def format_digest_briefing(item: dict[str, Any], *, index: int = 1, total: int =
     """
     rec = item.get("should_you_read") or {}
     why = item.get("why_it_matters") or {}
-    recommendation = rec.get("recommendation", "Watch")
+    recommendation = rec.get("recommendation", "Skim")
     emoji = PRIORITY_EMOJI.get(recommendation, "👁")
     category = _esc(item.get("source_category") or item.get("category_tag", "media"))
     source = _esc(item.get("source_display_name") or item.get("source_name"))

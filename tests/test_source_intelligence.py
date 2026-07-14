@@ -42,18 +42,20 @@ def test_cross_source_cluster_boosts_score():
     assert clustered.total >= solo.total
 
 
-def test_recommendation_read_now_requires_decision():
-    # A top-band score with no concrete decision attached should NOT default
-    # to "Read Now" — that's the whole point of grounding the label instead
-    # of just thresholding on score.
-    with_decision = recommendation_for_score(90, has_decision=True, category="official")
-    without_decision = recommendation_for_score(90, has_decision=False, category="research")
-    assert with_decision["recommendation"] == "Read Now"
-    assert without_decision["recommendation"] != "Read Now"
+def test_recommendation_decision_changes_reason_not_label():
+    # has_decision only sharpens the *reason* text within the top band — the
+    # label set is deliberately small (Read/Skim/File Away/Ignore) so the
+    # delivery/storage filter (Read+Skim shown, File Away stored only,
+    # Ignore dropped) stays simple.
+    with_decision = recommendation_for_score(90, has_decision=True)
+    without_decision = recommendation_for_score(90, has_decision=False)
+    assert with_decision["recommendation"] == "Read"
+    assert without_decision["recommendation"] == "Read"
+    assert with_decision["reason"] != without_decision["reason"]
 
 
 def test_recommendation_bands_cover_full_range():
     labels = {recommendation_for_score(s)["recommendation"] for s in (95, 75, 55, 35, 10)}
-    assert labels <= {
-        "Read Now", "Evaluate", "Compare Against Current Approach", "Watch", "Skim", "File Away", "Ignore",
-    }
+    assert labels <= {"Read", "Skim", "File Away", "Ignore"}
+    assert recommendation_for_score(95)["recommendation"] == "Read"
+    assert recommendation_for_score(10)["recommendation"] == "Ignore"

@@ -20,6 +20,4 @@ def test_signal_score_and_recommendation():
     )
     assert 0 <= breakdown.total <= 100
     rec = recommendation_for_score(breakdown.total)
-    assert rec["recommendation"] in {
-        "Read Now", "Evaluate", "Compare Against Current Approach", "Watch", "Skim", "File Away", "Ignore",
-    }
+    assert rec["recommendation"] in {"Read", "Skim", "File Away", "Ignore"}

@@ -25,11 +25,10 @@ summarizer or research digest, and change the product surface to match:
   are all genuinely optional — the skill is instructed to leave them empty when the source
   doesn't support one, rather than manufacture a plausible-sounding answer. An item that is
   only research-interesting should read as low-priority, not be dressed up as roadmap-relevant.
-- The recommendation label set is now grounded PM action language: **Read Now, Evaluate,
-  Compare Against Current Approach, Watch, Skim, File Away, Ignore** — replacing the old
-  urgency-only scale. "Read Now" specifically requires a grounded `decision_supported` value,
-  not just a high score, so a highly-novel item with no real decision attached gets "Evaluate"
-  or "Compare Against Current Approach" instead of an inflated "Read Now."
+- The recommendation label set is now grounded PM action language: **Read, Skim, File Away,
+  Ignore** — replacing the old urgency-only scale. `decision_supported` sharpens the *reason*
+  text within the top band (why it's "Read") without changing the label itself — the label
+  set is deliberately small so the storage/delivery rule below stays simple to reason about.
 - The numeric signal-score breakdown is no longer shown to the reader as the primary framing;
   the label plus a one-line plain-English reason (`should_you_read.reason`) is the entire
   reader-facing signal, per the existing scoring-transparency requirement, but the label
@@ -40,6 +39,14 @@ summarizer or research digest, and change the product surface to match:
   item's PM-relevance can be reasoned about component by component.
 - RCA and repair proposals remain internal reliability tooling only (ADR 0004); this ADR does
   not change that, but explicitly rules out ever marketing them as a customer-facing feature.
+- **Storage and delivery are filtered by label, not just ranking.** Only Read and Skim items
+  are ever pushed to Telegram (`signalos/workflows/pipeline.py::TELEGRAM_SHOWN_RECOMMENDATIONS`).
+  File Away items are still persisted (impact_json stored, reachable via the dashboard/API) so
+  they exist as an archive, but never reach the user's feed. Ignore items are not persisted at
+  all — the underlying `ContentItem` row from ingestion still exists (required for novelty
+  dedup against future days), but no impact analysis is stored or shown for it. This keeps the
+  daily Telegram feed to only what's actually worth a PM's attention, while the backend still
+  retains a broader record for reference and future evaluation.
 
 ## Consequences
 Positive:
@@ -47,8 +54,10 @@ Positive:
 - manufactured roadmap/decision claims become a measurable groundedness failure instead of
   invisible stylistic noise (see docs/EVALUATION.md)
 - ranking is explainable component-by-component instead of one opaque "impact" number
-- "Read Now" becomes meaningful again — it's rare and tied to a real decision, not the default
-  outcome for every well-written, high-novelty item
+- the label set is small and unambiguous — every item is exactly one of Read / Skim / File
+  Away / Ignore, and each maps to one storage/delivery outcome
+- the Telegram feed only ever contains Read/Skim items, so a noisy day doesn't degrade daily
+  reading — it just means fewer messages, not lower-quality ones
 
 Tradeoffs:
 - most items will legitimately have empty `roadmap_relevance` / `decision_supported` — this is
@@ -56,3 +65,7 @@ Tradeoffs:
   message than before
 - the skill prompt is longer and more constrained, which costs a small amount of extra output
   discipline from the model (mitigated by explicit few-field examples in the skill file)
+- on a day where the top-ranked candidates (selected before scoring, by authority/preference
+  bias) all land below Skim, the Telegram feed can go out with zero items even though lower-
+  ranked candidates further down the list were never analyzed — the pipeline does not currently
+  backfill additional candidates when top picks get filtered out post-scoring
