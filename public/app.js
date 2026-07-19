@@ -66,7 +66,7 @@ async function loadLatest() {
           ${(i.impact.what_changed || []).slice(0,4).map(b => `<li>${b}</li>`).join('')}
         </ul>
         <p class="muted"><strong>Action:</strong> ${i.impact.recommended_action || ''}</p>
-        <p class="muted">${i.impact.why_it_matters?.product || ''}</p>
+        <p class="muted">${i.impact.business_impact || ''}</p>
       ` : `<p class="muted">No impact analysis stored yet.</p>`}
       <p class="small"><a href="${i.url}" target="_blank">Open source</a></p>
       <p class="small muted">Confidence: ${((i.novelty_confidence || 0) * 100).toFixed(0)}%</p>

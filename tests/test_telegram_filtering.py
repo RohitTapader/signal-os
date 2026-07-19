@@ -9,7 +9,6 @@ def _item(recommendation: str, headline: str) -> dict:
         "source_category": "official",
         "source_display_name": "Src",
         "what_changed": [],
-        "why_it_matters": {},
         "supporting_evidence": [],
     }
 

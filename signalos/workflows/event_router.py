@@ -106,7 +106,14 @@ def route_telegram_update(update: dict) -> None:
             if data == "feedback_good":
                 db.add(FeedbackEvent(event_type="positive", text=None, payload_json=json.dumps(update)))
                 db.commit()
-                send_message(chat_id, "Thanks — logged as positive feedback.")
+                try:
+                    # Positive reinforcement: nudge today's categories up slightly so
+                    # future digests lean into the same pattern of content, mirroring
+                    # the negative nudge on "not_relevant" below but in reverse.
+                    _apply_item_selection_bias(chat_id, delta=0.05)
+                except Exception as exc:
+                    log_json("feedback_handling_error", stage="positive_reinforcement", error=str(exc), chat_id=chat_id)
+                send_message(chat_id, "Thanks — logged as positive feedback, future digests will lean into this.")
                 return
 
             if data == "feedback_bad":
@@ -275,7 +282,7 @@ def _resolve_feedback_elaboration(db, chat_id: str, pending: PendingInteraction,
 
     category = context.get("category", "other")
     if category == "not_relevant":
-        _apply_item_selection_bias(chat_id)
+        _apply_item_selection_bias(chat_id, delta=-0.05)
 
     if category in ("source_quality_issue", "other"):
         try:
@@ -291,7 +298,10 @@ def _resolve_feedback_elaboration(db, chat_id: str, pending: PendingInteraction,
     send_message(chat_id, "Thanks — noted, and future digests will factor this in.")
 
 
-def _apply_item_selection_bias(chat_id: str) -> None:
+def _apply_item_selection_bias(chat_id: str, *, delta: float) -> None:
+    """Nudge item-selection bias for today's digest categories. Positive delta
+    reinforces the same pattern of content (Good digest); negative delta backs
+    away from it (Did not like -> Not relevant)."""
     db = SessionLocal()
     try:
         latest = db.query(SystemEvent).filter(SystemEvent.event_type == "daily_digest_generated").order_by(SystemEvent.id.desc()).first()
@@ -300,7 +310,7 @@ def _apply_item_selection_bias(chat_id: str) -> None:
         payload = json.loads(latest.payload_json)
         categories = list({item.get("category_tag") for item in payload.get("digest_items", []) if item.get("category_tag")})
         if categories:
-            apply_category_bias(chat_id, categories, -0.05)
+            apply_category_bias(chat_id, categories, delta)
     finally:
         db.close()
 

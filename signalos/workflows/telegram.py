@@ -40,27 +40,19 @@ PRIORITY_SIGNOFF = {
 }
 
 
-def _is_distinct(whats_new: str, executive_summary: str) -> bool:
-    """Only show 'What's new' when it says something the executive summary
-    doesn't already cover — otherwise it's just restating the same point."""
-    whats_new = (whats_new or "").strip()
-    if not whats_new:
-        return False
-    return whats_new.lower() not in (executive_summary or "").lower()
-
-
 def format_digest_briefing(item: dict[str, Any], *, index: int = 1, total: int = 1) -> str:
     """A decision briefing, not a news summary — what changed, why it matters
-    to an AI PM, who should care, and what decision it informs, in that order.
+    to an AI PM, who should care, in that order.
 
     Designed to be read in a scroll: a scannable eyebrow line carrying the
     grounded action label (never a vague "read later"), a punchy headline +
-    plain-English reason up top, tight bullets, a pulled-quote takeaway that
-    breaks the visual pattern, and a recommendation-specific sign-off so a
-    multi-item daily digest doesn't read as the same template five times over.
+    plain-English reason up top, a single "What's New/Changed" section that
+    folds in cross-source cluster context and comparison bullets, a pulled-
+    quote takeaway that breaks the visual pattern, and a recommendation-
+    specific sign-off so a multi-item daily digest doesn't read as the same
+    template five times over.
     """
     rec = item.get("should_you_read") or {}
-    why = item.get("why_it_matters") or {}
     recommendation = rec.get("recommendation", "Skim")
     emoji = PRIORITY_EMOJI.get(recommendation, "👁")
     category = _esc(item.get("source_category") or item.get("category_tag", "media"))
@@ -77,35 +69,27 @@ def format_digest_briefing(item: dict[str, Any], *, index: int = 1, total: int =
         lines.append(f"👤 For: {_esc(item['who_should_care'])}")
     lines.append("")
 
-    corroborating = item.get("corroborating_sources") or []
-    if corroborating:
-        names = ", ".join(_esc(c.get("display_name", "")) for c in corroborating[:4])
-        lines += [f"🔗 <b>Confirmed by {item.get('source_count', 1)} sources</b> — also covered by {names}", ""]
-
     if item.get("executive_summary"):
         lines += [_esc(item["executive_summary"]), ""]
 
-    if _is_distinct(item.get("whats_new", ""), item.get("executive_summary", "")):
-        lines += [f"🆕 {_esc(item['whats_new'])}", ""]
-
+    # One section for both the cross-source cluster ("who else is covering
+    # this") and the concrete deltas, so a reader gets a single coherent
+    # picture of what's new/changed instead of three disconnected fragments.
+    corroborating = item.get("corroborating_sources") or []
     bullets = item.get("what_changed") or []
-    if bullets:
-        lines.append("<b>What changed</b>")
-        lines.extend(f"▸ {_esc(b)}" for b in bullets[:4])
+    if corroborating or bullets:
+        lines.append("<b>What's New/Changed</b>")
+        if corroborating:
+            names = ", ".join(_esc(c.get("display_name", "")) for c in corroborating[:4])
+            lines.append(f"🔗 Confirmed by {item.get('source_count', 1)} sources — also covered by {names}")
+        lines.extend(f"▸ {_esc(b)}" for b in bullets[:5])
         lines.append("")
 
-    strategic: list[str] = []
-    if item.get("roadmap_relevance"):
-        strategic.append(f"🎯 <b>Roadmap</b> — {_esc(item['roadmap_relevance'])}")
-    if item.get("business_metric_impact"):
-        strategic.append(f"💰 <b>Business metric</b> — {_esc(item['business_metric_impact'])}")
-    if why.get("competitive"):
-        strategic.append(f"🏆 <b>Competitive</b> — {_esc(why['competitive'])}")
-    if strategic:
-        lines += strategic + [""]
+    if item.get("business_impact"):
+        lines += [f"💰 <b>Business Impact</b> — {_esc(item['business_impact'])}", ""]
 
-    if item.get("decision_supported"):
-        lines += [f"🧭 <b>Decision this informs:</b> {_esc(item['decision_supported'])}", ""]
+    if item.get("competitive_insight"):
+        lines += [f"🏆 <b>Competitive Insight</b> — {_esc(item['competitive_insight'])}", ""]
 
     if item.get("pm_takeaway"):
         lines += [f"<blockquote>💡 {_esc(item['pm_takeaway'])}</blockquote>", ""]

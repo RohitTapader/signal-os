@@ -42,30 +42,25 @@ class ImpactResult(BaseModel):
     headline: str
     context: str = ""
     executive_summary: str = ""
-    whats_new: str = ""
+    # What's New/Changed bullets. When the source describes an update to something
+    # pre-existing, these are phrased as before->after comparisons; for a brand-new
+    # item they're plain concrete deltas. Rendered together with cross-source
+    # cluster info as one section (signalos.workflows.telegram).
     what_changed: list[str] = Field(default_factory=list)
     key_innovation: str = ""
     pm_takeaway: str = ""
-    # Direct, specific strategic callouts for an AI PM — deliberately separate from
-    # the more general why_it_matters bullets so a reader gets one concrete "so what"
-    # per axis instead of having to infer it from a paragraph. roadmap_relevance is
-    # genuinely optional: the skill is instructed to leave it empty rather than
-    # invent a roadmap implication the source doesn't support.
-    roadmap_relevance: str = ""
-    business_metric_impact: str = ""
+    # Sector + business impact + concrete metric(s), from a senior AI PM lens.
+    # Genuinely optional: empty when the source gives no real basis for a claim.
+    business_impact: str = ""
+    # What big/competing companies are already doing here, or the competitive edge
+    # at stake — only populated when it adds something not already covered by
+    # executive_summary/what_changed/business_impact. Empty is the common case.
+    competitive_insight: str = ""
     # Who this is actually for, and what decision it feeds — empty when the source
-    # doesn't support a specific answer. These are what let the recommendation
-    # label be "Read Now" instead of a softer label (see recommendation_for_score).
+    # doesn't support a specific answer. decision_supported sharpens the "Read"
+    # reason text (see recommendation_for_score) but is not displayed directly.
     who_should_care: str = ""
     decision_supported: str = ""
-    why_it_matters: dict[str, str | list[str]] = Field(
-        default_factory=lambda: {
-            "product": "",
-            "business": "",
-            "competitive": "",
-            "product_business": [],
-        }
-    )
     recommended_action: str = ""
     companies_impacted: list[str] = Field(default_factory=list)
     confidence: float = Field(ge=0, le=1)
@@ -137,11 +132,10 @@ class DigestItem(BaseModel):
     headline: str
     context: str = ""
     executive_summary: str = ""
-    whats_new: str = ""
     key_innovation: str = ""
     pm_takeaway: str = ""
-    roadmap_relevance: str = ""
-    business_metric_impact: str = ""
+    business_impact: str = ""
+    competitive_insight: str = ""
     who_should_care: str = ""
     decision_supported: str = ""
     signal_type: str = "general"
@@ -151,7 +145,6 @@ class DigestItem(BaseModel):
     corroborating_sources: list[dict[str, str | int]] = Field(default_factory=list)
     source_count: int = 1
     what_changed: list[str]
-    why_it_matters: dict[str, str | list[str]]
     recommended_action: str = ""
     companies_impacted: list[str] = Field(default_factory=list)
     confidence: float

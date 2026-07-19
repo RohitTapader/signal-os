@@ -13,14 +13,12 @@ FALLBACK_IMPACT = {
     "headline": "Executive intelligence unavailable",
     "context": "",
     "executive_summary": "The model did not return a fully valid executive summary.",
-    "whats_new": "",
     "what_changed": [],
     "key_innovation": "",
-    "roadmap_relevance": "",
-    "business_metric_impact": "",
+    "business_impact": "",
+    "competitive_insight": "",
     "who_should_care": "",
     "decision_supported": "",
-    "why_it_matters": {"product_business": [], "competitive": "", "product": "", "business": ""},
     "pm_takeaway": "",
     "recommended_action": "Review the source directly.",
     "companies_impacted": [],
@@ -42,24 +40,6 @@ def _safe_load(raw: str) -> dict[str, Any]:
     except Exception:
         pass
     return {}
-
-
-def _normalize_why_it_matters(raw: dict[str, Any]) -> dict[str, Any]:
-    why = raw.get("why_it_matters") or {}
-    product_business = why.get("product_business") or []
-    if not product_business:
-        bullets = []
-        if why.get("product"):
-            bullets.append(why["product"])
-        if why.get("business"):
-            bullets.append(why["business"])
-        product_business = bullets
-    return {
-        "product_business": product_business[:5],
-        "competitive": why.get("competitive", ""),
-        "product": why.get("product", ""),
-        "business": why.get("business", ""),
-    }
 
 
 def _normalize_evidence(
@@ -140,7 +120,7 @@ def analyze_impact(
     prompt = f"""
 Signal is a decision-support system for AI Product Managers, not a news summarizer. You are
 deciding whether this item is worth an AI PM's attention today, and answering: what changed,
-why it matters to an AI PM, who should care, and what decision it informs.
+why it matters to an AI PM, and who should care.
 
 PRIMARY SOURCE: {item.display_name or item.source_name} ({item.source_category})
 TITLE: {item.title}
@@ -153,21 +133,20 @@ Rules:
 - headline: sharp and specific — lead with the angle that actually matters to a PM, not a generic
   "X launches Y" label. Max 14 words. Never sensationalize beyond what the source supports.
 - executive_summary: 2-3 sentences, decision-oriented — what happened and why it matters, stated directly.
-- whats_new: ONE short sentence, only if it adds something not already in executive_summary. Otherwise "".
-- what_changed: 3-4 bullets max, each a specific, concrete delta — not a restatement of the headline.
-- roadmap_relevance: 1-2 sentences, ONLY if the source genuinely supports a specific roadmap implication.
-  If there is no real one, return an empty string — do not manufacture a roadmap angle for items that are
-  simply interesting.
-- business_metric_impact: 1-2 sentences naming ONE concrete business metric (CAC, COGS, margin, retention,
-  ARPU, time-to-market, inference cost) and the directional effect. Empty string if the source gives no
-  real basis for a metric claim — never invent one.
+- what_changed: 3-5 bullets for the "What's New/Changed" section. If this is an update or change to
+  something that already existed, phrase EACH bullet as a before->after comparison (e.g. "Usage cap raised
+  from 50/day to unlimited") so the reader can relate it to what they already knew. If it's a brand-new
+  announcement with nothing to compare, use plain concrete-delta bullets instead. Never restate the headline.
+- business_impact: 2-3 sentences naming (a) the SECTOR/product category affected, (b) the concrete business
+  impact, and (c) at least one specific metric (CAC, COGS, margin, retention, ARPU, time-to-market, inference
+  cost). Empty string if the source gives no real basis for a claim — never invent one.
+- competitive_insight: 1-2 sentences, ONLY if genuinely new — e.g. a specific competing company already
+  exploring this, or a concrete competitive edge at stake. Must NOT repeat executive_summary, what_changed,
+  or business_impact in different words. Empty string for most items.
 - who_should_care: 1 short phrase naming the specific kind of AI PM this matters to. Empty string if this
   is only research-interesting with no clear practitioner audience — never write "all AI PMs".
 - decision_supported: 1 short phrase naming the SPECIFIC decision this informs. Empty string for most
   items — only set this when the source genuinely changes a real decision a PM would be making.
-- why_it_matters.product_business: 3-4 bullets — supporting detail NOT already covered by roadmap_relevance
-  or business_metric_impact.
-- why_it_matters.competitive: 2-3 sentences on competitive positioning.
 - pm_takeaway: 2-3 punchy, quotable sentences — this gets pulled out as a standalone highlighted quote in
   the digest, so it must stand alone. The one thing to remember and act on.
 - product_impact_confidence / business_impact_confidence / strategic_relevance_confidence (each 0-1): rate
@@ -181,17 +160,12 @@ Return JSON only:
   "headline": "...",
   "context": "...",
   "executive_summary": "...",
-  "whats_new": "...",
   "what_changed": ["..."],
   "key_innovation": "...",
-  "roadmap_relevance": "...",
-  "business_metric_impact": "...",
+  "business_impact": "...",
+  "competitive_insight": "...",
   "who_should_care": "...",
   "decision_supported": "...",
-  "why_it_matters": {{
-    "product_business": ["..."],
-    "competitive": "..."
-  }},
   "pm_takeaway": "...",
   "recommended_action": "...",
   "companies_impacted": ["..."],
@@ -218,7 +192,6 @@ SOURCE TEXT:
     merged = {**FALLBACK_IMPACT, **data}
     merged["what_changed"] = (merged.get("what_changed") or [])[:5]
     merged["companies_impacted"] = list(dict.fromkeys(merged.get("companies_impacted") or []))[:5]
-    merged["why_it_matters"] = _normalize_why_it_matters(merged)
     merged["supporting_evidence"] = _normalize_evidence(
         merged.get("supporting_evidence") or [],
         str(item.url),
