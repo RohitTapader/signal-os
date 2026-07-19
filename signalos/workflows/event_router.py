@@ -26,7 +26,7 @@ from signalos.core.input_safety import sanitize_user_text
 from signalos.core.llm import BudgetExceededError
 from signalos.core.logging import log_json
 from signalos.core.models import FeedbackClassification
-from signalos.core.preferences import apply_bounded_delta, apply_category_bias, consume_daily_change_budget
+from signalos.core.preferences import apply_bounded_delta, apply_category_bias, consume_daily_change_budget, set_recent_feedback_note
 from signalos.workflows.pipeline import regenerate_from_cache, send_to_telegram
 from signalos.workflows.telegram import (
     answer_callback_query,
@@ -215,7 +215,7 @@ def _handle_feedback_category(db, chat_id: str, category: str) -> None:
 
     _set_pending(db, chat_id, "awaiting_feedback_elaboration", {"feedback_event_id": row.id, "category": category})
     send_message(chat_id, f"Got it — logged as “{label}”.")
-    ask_feedback_elaboration(chat_id)
+    ask_feedback_elaboration(chat_id, category)
 
 
 def _apply_novelty_tuning(db, chat_id: str, category: str) -> None:
@@ -283,6 +283,10 @@ def _resolve_feedback_elaboration(db, chat_id: str, pending: PendingInteraction,
     category = context.get("category", "other")
     if category == "not_relevant":
         _apply_item_selection_bias(chat_id, delta=-0.05)
+
+    # One-shot: shapes the next digest's tone/focus for this specific
+    # complaint, then is consumed and cleared (see pop_recent_feedback_note).
+    set_recent_feedback_note(category, clean_text)
 
     if category in ("source_quality_issue", "other"):
         try:

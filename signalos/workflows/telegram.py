@@ -169,8 +169,10 @@ def ask_feedback_category(chat_id: str):
     return send_message(chat_id, "Sorry to hear that — what didn't work?", reply_markup={"inline_keyboard": rows})
 
 
-def ask_feedback_elaboration(chat_id: str):
-    return send_message(chat_id, "Want to add details? Reply with specifics, or send ‘skip’.")
+def ask_feedback_elaboration(chat_id: str, category: str = "other"):
+    from signalos.core.feedback_guardrails import CLARIFYING_QUESTIONS
+    question = CLARIFYING_QUESTIONS.get(category, CLARIFYING_QUESTIONS["other"])
+    return send_message(chat_id, f"{question}\n\n(Or reply 'skip'.)")
 
 
 def ask_regenerate_mode(chat_id: str):

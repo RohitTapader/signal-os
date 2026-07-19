@@ -15,7 +15,7 @@ from signalos.core.db import ContentItem, SessionLocal, SystemEvent, init_db
 from signalos.core.llm import BudgetExceededError
 from signalos.core.logging import log_json
 from signalos.core.models import DigestItem, NoveltyResult, PreferenceProfile, SourceItem
-from signalos.core.preferences import get_preference_profile
+from signalos.core.preferences import get_preference_profile, pop_recent_feedback_note
 from signalos.ingestion.collector import collect_all_sources
 from signalos.source_intelligence.briefing import merged_source_context
 from signalos.source_intelligence.clustering import cluster_items, pick_primary_item, supporting_items
@@ -135,6 +135,7 @@ def _build_digest(
     force_refresh: bool = False,
     angle: str | None = None,
     preferences: PreferenceProfile | None = None,
+    feedback_note: dict | None = None,
     temperature: float | None = None,
 ) -> list[DigestItem]:
     """Cluster accepted rows, run/reuse impact analysis, score, and render
@@ -143,6 +144,10 @@ def _build_digest(
     force_refresh=True always recomputes impact (used by regenerate, so an
     angle or updated preferences actually take effect instead of hitting the
     cached impact_json from the original run).
+
+    feedback_note is a one-shot dict {"category", "text"} popped from the
+    most recent "Did not like" elaboration — passed to every fresh analysis
+    in THIS run only, never persisted or re-applied to later runs.
     """
     # Always cluster fresh: a row reused across multiple _build_digest calls
     # (e.g. two regenerates the same day) would otherwise keep a stale
@@ -225,6 +230,7 @@ def _build_digest(
                 corroborating=supporting_items_models,
                 user_angle=angle,
                 preferences=preferences,
+                feedback_note=feedback_note,
                 temperature=temperature,
             )
         except BudgetExceededError as e:
@@ -343,7 +349,8 @@ def generate_digest_from_items(items: list[SourceItem], run_id: str | None = Non
 
         run_id = run_id or str(uuid.uuid4())
         preferences = get_preference_profile(settings.telegram_chat_id)
-        digest_items = _build_digest(db, accepted_rows, run_id, preferences=preferences)
+        feedback_note = pop_recent_feedback_note()
+        digest_items = _build_digest(db, accepted_rows, run_id, preferences=preferences, feedback_note=feedback_note)
 
         briefings = [d.model_dump() for d in digest_items]
 
@@ -398,6 +405,7 @@ def regenerate_from_cache(run_id: str | None = None, *, angle: str | None = None
             }
 
         preferences = get_preference_profile(chat_id)
+        feedback_note = pop_recent_feedback_note()
         # A regenerate is explicitly asked to try again with "improved"
         # settings — a modest, bounded temperature reduction for more
         # consistent output, never an unbounded or user-controlled value.
@@ -409,6 +417,7 @@ def regenerate_from_cache(run_id: str | None = None, *, angle: str | None = None
             force_refresh=True,
             angle=angle,
             preferences=preferences,
+            feedback_note=feedback_note,
             temperature=temperature,
         )
 

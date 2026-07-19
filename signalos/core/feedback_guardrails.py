@@ -24,6 +24,20 @@ FEEDBACK_CATEGORY_LABELS: dict[str, str] = {
 }
 ALLOWED_FEEDBACK_CATEGORIES: frozenset[str] = frozenset(FEEDBACK_CATEGORY_LABELS)
 
+# Specific follow-up question per category — asked right after the user picks
+# a "Did not like" reason, so the free-text reply actually addresses what
+# went wrong instead of a generic "want to add details?" prompt.
+CLARIFYING_QUESTIONS: dict[str, str] = {
+    "too_technical": "What made it too technical — heavy jargon, too much implementation detail, or missing plain-language framing?",
+    "too_verbose": "What felt too long — the executive summary, the bullets, or just too many sections overall?",
+    "not_relevant": "What made it feel irrelevant — wrong topic area, wrong company/product focus, or not useful to your role?",
+    "too_repetitive": "What repeated — the same story across multiple sources, or similar stories across different days?",
+    "not_enough_new_information": "What was missing — more technical depth, more business-impact detail, or did it just feel too surface-level overall?",
+    "source_quality_issue": "What was the issue — a broken or wrong link, a low-credibility source, or inaccurate information?",
+    "recommendation_issue": "What was off — marked too urgent (Read when it wasn't worth it), too soft (should've been Read but wasn't), or the reasoning just didn't make sense?",
+    "other": "What would you like to share? Any detail helps.",
+}
+
 # --- Bounded preference fields ----------------------------------------------------
 # Hard min/max every write is clamped to, regardless of requested delta.
 PREFERENCE_BOUNDS: dict[str, tuple[float, float]] = {

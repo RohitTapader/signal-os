@@ -12,10 +12,12 @@ from __future__ import annotations
 import json
 from datetime import date, datetime
 
-from signalos.core.db import SessionLocal, UserPreferenceState
-from signalos.core.feedback_guardrails import MAX_PREFERENCE_EVENTS_PER_DAY, PREFERENCE_BOUNDS
+from signalos.core.db import SessionLocal, SystemSetting, UserPreferenceState
+from signalos.core.feedback_guardrails import MAX_FEEDBACK_TEXT_LENGTH, MAX_PREFERENCE_EVENTS_PER_DAY, PREFERENCE_BOUNDS
 from signalos.core.logging import log_json
 from signalos.core.models import PreferenceProfile
+
+RECENT_FEEDBACK_NOTE_KEY = "recent_feedback_note"
 
 
 def _get_or_create_row(db, chat_id: str) -> UserPreferenceState:
@@ -115,5 +117,49 @@ def apply_category_bias(chat_id: str, category_tags: list[str], delta: float, ma
         db.commit()
         log_json("preference_updated", chat_id=chat_id, field="category_bias", tags=category_tags[:max_keys], delta=delta)
         return True
+    finally:
+        db.close()
+
+
+def set_recent_feedback_note(category: str, text: str) -> None:
+    """Stores the sanitized elaboration text from the most recent 'Did not
+    like' reply, already-safe (caller must have run it through
+    signalos.core.input_safety.sanitize_user_text first). Consumed exactly
+    once by pop_recent_feedback_note() at the start of the next digest run —
+    this shapes the next digest's tone/focus, not every future run."""
+    text = (text or "").strip()[:MAX_FEEDBACK_TEXT_LENGTH]
+    if not text:
+        return
+    db = SessionLocal()
+    try:
+        payload = json.dumps({"category": category, "text": text})
+        row = db.get(SystemSetting, RECENT_FEEDBACK_NOTE_KEY)
+        if row:
+            row.value = payload
+            row.updated_at = datetime.utcnow()
+        else:
+            db.add(SystemSetting(key=RECENT_FEEDBACK_NOTE_KEY, value=payload))
+        db.commit()
+        log_json("feedback_note_set", category=category)
+    finally:
+        db.close()
+
+
+def pop_recent_feedback_note() -> dict | None:
+    """Reads and clears the pending feedback note in one step — one-shot by
+    design, so a 'too technical' comment nudges the very next digest and then
+    stops, rather than silently biasing every run afterward."""
+    db = SessionLocal()
+    try:
+        row = db.get(SystemSetting, RECENT_FEEDBACK_NOTE_KEY)
+        if not row:
+            return None
+        value = row.value
+        db.delete(row)
+        db.commit()
+        try:
+            return json.loads(value)
+        except (TypeError, ValueError):
+            return None
     finally:
         db.close()
