@@ -1,0 +1,8 @@
+arize-phoenix
+arize-phoenix-evals>=3
+arize-phoenix-client
+ragas
+# ragas 0.4.3 unconditionally imports langchain_community.chat_models.vertexai,
+# which newer langchain-community releases (0.4.x) removed. Pin below the
+# break until ragas fixes the import.
+langchain-community<0.4

@@ -11,8 +11,9 @@ Signal ships with:
 - trusted-source ingestion
 - novelty filtering
 - PM decision-intelligence synthesis (executive analysis framed as a decision, not a summary)
-- 7-factor PM-relevance signal scoring and a grounded recommendation label (Read Now /
-  Evaluate / Compare Against Current Approach / Watch / Skim / File Away / Ignore)
+- 7-factor PM-relevance signal scoring and a grounded recommendation label (Read / Skim /
+  File Away / Ignore) — only Read and Skim reach Telegram; File Away is archived, not sent;
+  Ignore is not stored
 - Telegram delivery as text decision briefings
 - feedback-driven, bounded preference adaptation and repair proposals (internal reliability
   tooling, not a customer-facing feature)
@@ -39,6 +40,20 @@ cp .env.example .env
 ```
 
 Edit `.env` and `signalos/config/sources.yaml`.
+
+### Optional: evaluation/observability tooling
+
+Not used by the running app — only needed if you're building out offline eval or tracing
+(see `docs/EVALUATION.md`). Kept out of the base install to avoid bloating the Vercel
+production build.
+
+```bash
+uv pip install -r requirements-eval.txt
+# or: uv pip install -e ".[eval]"
+```
+
+Includes `arize-phoenix` (`phoenix serve` starts its local tracing UI), `arize-phoenix-evals`,
+`arize-phoenix-client`, and `ragas`.
 
 ## Run locally
 

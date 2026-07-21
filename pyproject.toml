@@ -27,6 +27,22 @@ dependencies = [
   "psycopg2-binary>=2.9.9"
 ]
 
+[project.optional-dependencies]
+# Local evaluation/observability tooling — not used by the running app, so
+# kept out of the base dependencies to avoid bloating the Vercel production
+# build (these pull in langchain, scikit-learn, scipy, pyarrow, etc.).
+# Install locally with: uv pip install -e ".[eval]"
+eval = [
+  "arize-phoenix",
+  "arize-phoenix-evals>=3",
+  "arize-phoenix-client",
+  "ragas",
+  # ragas 0.4.3 unconditionally imports langchain_community.chat_models.vertexai,
+  # which newer langchain-community releases (0.4.x) removed. Pin below the
+  # break until ragas fixes the import.
+  "langchain-community<0.4",
+]
+
 [tool.setuptools.packages.find]
 include = ["signalos*"]
 namespaces = false
